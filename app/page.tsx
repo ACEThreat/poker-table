@@ -37,6 +37,7 @@ export default function Home() {
   const [webpageTimestamp, setWebpageTimestamp] = useState<string>('');
   const [hasPreviousDayData, setHasPreviousDayData] = useState(false);
   const [previousDayDate, setPreviousDayDate] = useState<string | null>(null);
+  const [showPreviousDayStats, setShowPreviousDayStats] = useState(true);
   
   // Historical data state
   const [availableDates, setAvailableDates] = useState<HistoricalSnapshot[]>([]);
@@ -216,7 +217,7 @@ export default function Home() {
               </p>
             </div>
           )}
-          {!isHistoricalView && hasPreviousDayData && previousDayDate && (
+          {!isHistoricalView && hasPreviousDayData && previousDayDate && showPreviousDayStats && (
             <p className="text-blue-400 text-xs mt-2">
               📊 Showing changes since {previousDayDate}
             </p>
@@ -224,6 +225,31 @@ export default function Home() {
         </div>
 
         <div className="mb-6 space-y-4">
+          {/* Previous day comparison toggle */}
+          {!isHistoricalView && hasPreviousDayData && previousDayDate && (
+            <div className="flex gap-4 items-center p-4 bg-gray-900 rounded-lg border border-gray-800">
+              <label className="text-gray-400 text-sm font-medium">Previous day comparison:</label>
+              <button
+                onClick={() => setShowPreviousDayStats(!showPreviousDayStats)}
+                className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+                  showPreviousDayStats
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700'
+                }`}
+              >
+                {showPreviousDayStats ? '✓ Showing Changes' : 'Show Changes'}
+              </button>
+              {showPreviousDayStats && (
+                <span className="text-blue-400 text-sm">
+                  vs {new Date(previousDayDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Historical date selector */}
           {availableDates.length > 0 && (
             <div className="flex gap-4 items-center flex-wrap p-4 bg-gray-900 rounded-lg border border-gray-800">
@@ -357,7 +383,7 @@ export default function Home() {
                         }`}>
                           {player.rank}
                         </span>
-                        <RankChangeIndicator change={player.rankChange} />
+                        {showPreviousDayStats && <RankChangeIndicator change={player.rankChange} />}
                       </div>
                     </td>
                     <td className="px-4 py-3 font-medium">
@@ -372,7 +398,7 @@ export default function Home() {
                     }`}>
                       <div className="flex items-center justify-end">
                         {formatCurrency(player.evWon)}
-                        {formatChange(player.evWonChange, true)}
+                        {showPreviousDayStats && formatChange(player.evWonChange, true)}
                       </div>
                     </td>
                     <td className={`px-4 py-3 text-right font-mono ${
@@ -380,7 +406,7 @@ export default function Home() {
                     }`}>
                       <div className="flex items-center justify-end">
                         {player.evBB100.toFixed(2)}
-                        {formatChange(player.evBB100Change)}
+                        {showPreviousDayStats && formatChange(player.evBB100Change)}
                       </div>
                     </td>
                     <td className={`px-4 py-3 text-right font-mono ${
@@ -388,13 +414,13 @@ export default function Home() {
                     }`}>
                       <div className="flex items-center justify-end">
                         {formatCurrency(player.won)}
-                        {formatChange(player.wonChange, true)}
+                        {showPreviousDayStats && formatChange(player.wonChange, true)}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-gray-400">
                       <div className="flex items-center justify-end">
                         {formatNumber(player.hands)}
-                        {player.handsChange !== undefined && player.handsChange !== 0 && (
+                        {showPreviousDayStats && player.handsChange !== undefined && player.handsChange !== 0 && (
                           <span className="text-xs ml-1 text-blue-400">
                             (+{formatNumber(player.handsChange)})
                           </span>
