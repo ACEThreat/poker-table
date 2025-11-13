@@ -225,21 +225,26 @@ export default function Home() {
         </div>
 
         <div className="mb-6 space-y-4">
-          {/* Previous day comparison toggle */}
-          {!isHistoricalView && hasPreviousDayData && previousDayDate && (
+          {/* Previous day comparison toggle - always show when not in historical view */}
+          {!isHistoricalView && (
             <div className="flex gap-4 items-center p-4 bg-gray-900 rounded-lg border border-gray-800">
-              <label className="text-gray-400 text-sm font-medium">Previous day comparison:</label>
+              <label className="text-gray-400 text-sm font-medium">
+                {hasPreviousDayData && previousDayDate ? 'Previous day comparison:' : 'Previous day comparison (no data):'}
+              </label>
               <button
                 onClick={() => setShowPreviousDayStats(!showPreviousDayStats)}
+                disabled={!hasPreviousDayData}
                 className={`px-4 py-2 rounded-lg transition-colors font-medium ${
-                  showPreviousDayStats
+                  !hasPreviousDayData
+                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                    : showPreviousDayStats
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700'
                 }`}
               >
                 {showPreviousDayStats ? '✓ Showing Changes' : 'Show Changes'}
               </button>
-              {showPreviousDayStats && (
+              {showPreviousDayStats && previousDayDate && (
                 <span className="text-blue-400 text-sm">
                   vs {new Date(previousDayDate).toLocaleDateString('en-US', {
                     month: 'short',
