@@ -98,7 +98,7 @@ export default function Home() {
     <div className="min-h-screen bg-black text-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">High Stakes Cash Game World Championship</h1>
+          <h1 className="text-3xl font-bold mb-2">BGCWC-Table</h1>
           <p className="text-gray-400 text-sm">Leaderboard - Live Data</p>
           {lastUpdated && (
             <p className="text-gray-500 text-xs mt-1">
