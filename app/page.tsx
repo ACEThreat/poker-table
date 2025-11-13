@@ -193,6 +193,25 @@ export default function Home() {
             <p>Created by Shane &quot;KCC Tech Support&quot;</p>
             <p className="text-gray-500">For Kolde&apos;s Calorie Counters Discord</p>
           </div>
+          
+          {/* Tip Me Section */}
+          <div className="mt-4 mb-6 p-4 bg-gradient-to-r from-purple-900/20 via-blue-900/20 to-purple-900/20 border border-purple-700/30 rounded-lg max-w-2xl mx-auto">
+            <p className="text-purple-300 text-sm font-semibold mb-3 flex items-center justify-center gap-2">
+              <span>💝</span>
+              <span>Tip Me</span>
+              <span>💝</span>
+            </p>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between gap-3 bg-black/30 p-2 rounded">
+                <span className="text-gray-400 font-medium">ETH:</span>
+                <code className="text-purple-300 font-mono text-[10px] sm:text-xs break-all">0x8c06eA5A880f74A2DC3e00C1d509D47B73bbDB09</code>
+              </div>
+              <div className="flex items-center justify-between gap-3 bg-black/30 p-2 rounded">
+                <span className="text-gray-400 font-medium">BTC:</span>
+                <code className="text-purple-300 font-mono text-[10px] sm:text-xs break-all">bc1q9e7pdjsw4p7ytxggv0q0tu4n4z2njjz5wxncad</code>
+              </div>
+            </div>
+          </div>
           {webpageTimestamp && (
             <p className="text-gray-500 text-xs mt-1">
               Leaderboard last updated: {webpageTimestamp}
@@ -225,36 +244,6 @@ export default function Home() {
         </div>
 
         <div className="mb-6 space-y-4">
-          {/* Previous day comparison toggle - always show when not in historical view */}
-          {!isHistoricalView && (
-            <div className="flex gap-4 items-center p-4 bg-gray-900 rounded-lg border border-gray-800">
-              <label className="text-gray-400 text-sm font-medium">
-                {hasPreviousDayData && previousDayDate ? 'Previous day comparison:' : 'Previous day comparison (no data):'}
-              </label>
-              <button
-                onClick={() => setShowPreviousDayStats(!showPreviousDayStats)}
-                disabled={!hasPreviousDayData}
-                className={`px-4 py-2 rounded-lg transition-colors font-medium ${
-                  !hasPreviousDayData
-                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
-                    : showPreviousDayStats
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700'
-                }`}
-              >
-                {showPreviousDayStats ? '✓ Showing Changes' : 'Show Changes'}
-              </button>
-              {showPreviousDayStats && previousDayDate && (
-                <span className="text-blue-400 text-sm">
-                  vs {new Date(previousDayDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric'
-                  })}
-                </span>
-              )}
-            </div>
-          )}
-
           {/* Historical date selector */}
           {availableDates.length > 0 && (
             <div className="flex gap-4 items-center flex-wrap p-4 bg-gray-900 rounded-lg border border-gray-800">
@@ -286,26 +275,45 @@ export default function Home() {
           )}
 
           {/* Search and refresh controls */}
-          <div className="flex gap-4 items-center flex-wrap">
-            <input
-              type="text"
-              placeholder="Search players..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 min-w-[200px] px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            <button
-              onClick={() => {
-                fetchData(selectedDate || undefined);
-                if (!selectedDate) {
-                  fetchAvailableDates();
-                }
-              }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
-              disabled={loading}
-            >
-              {loading ? 'Refreshing...' : 'Refresh Data'}
-            </button>
+          <div className="flex gap-4 items-center flex-wrap justify-between">
+            <div className="flex gap-4 items-center flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="Search players..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div className="flex gap-4 items-center">
+              {/* Previous day comparison toggle - minimal aesthetic version */}
+              {!isHistoricalView && hasPreviousDayData && previousDayDate && (
+                <button
+                  onClick={() => setShowPreviousDayStats(!showPreviousDayStats)}
+                  className={`group relative px-3 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 ${
+                    showPreviousDayStats 
+                      ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' 
+                      : 'bg-gray-800/50 text-gray-500 hover:bg-gray-800 hover:text-gray-400'
+                  }`}
+                  title={showPreviousDayStats ? `Hide changes since ${previousDayDate}` : `Show changes since ${previousDayDate}`}
+                >
+                  <span className="text-sm">📊</span>
+                  <span className="text-xs font-medium">{showPreviousDayStats ? 'On' : 'Off'}</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  fetchData(selectedDate || undefined);
+                  if (!selectedDate) {
+                    fetchAvailableDates();
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
+                disabled={loading}
+              >
+                {loading ? 'Refreshing...' : 'Refresh Data'}
+              </button>
+            </div>
           </div>
         </div>
 
