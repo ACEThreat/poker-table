@@ -203,7 +203,13 @@ export default function Home() {
                         {player.rank}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-medium">{player.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {player.name === 'SeaLlama' ? (
+                        <span className="text-yellow-500 font-bold">🐐 {player.name} 🐐</span>
+                      ) : (
+                        player.name
+                      )}
+                    </td>
                     <td className={`px-4 py-3 text-right font-mono ${
                       player.evWon >= 0 ? 'text-green-400' : 'text-red-400'
                     }`}>
