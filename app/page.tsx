@@ -187,8 +187,8 @@ export default function Home() {
           <div className="mb-4">
             <div className="flex items-center justify-center gap-3 mb-3">
               <span className="text-4xl md:text-5xl">🏆</span>
-              <h1 className="text-4xl md:text-6xl font-extrabold bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-transparent bg-clip-text animate-pulse">
-                Better.gg
+              <h1 className="text-4xl md:text-6xl font-extrabold bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-transparent bg-clip-text animate-pulse pb-2 leading-tight">
+                Bettercgwc.xyz
               </h1>
               <span className="text-4xl md:text-5xl">🏆</span>
             </div>
