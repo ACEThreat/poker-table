@@ -18,8 +18,54 @@ interface PlayerData {
   hands: number;
 }
 
-let cachedData: { players: PlayerData[]; lastUpdated: string } | null = null;
+interface CachedData {
+  players: PlayerData[];
+  lastUpdated: string;
+  webpageTimestamp: string; // The actual timestamp from the webpage
+}
+
+let cachedData: CachedData | null = null;
 let cacheTimestamp = 0;
+
+// Parse the "Leaderboard last updated" timestamp from the webpage
+function parseWebpageTimestamp(html: string): string | null {
+  try {
+    const $ = cheerio.load(html);
+    // Look for the text containing "Leaderboard last updated"
+    const timestampText = $('body').text();
+    const match = timestampText.match(/Leaderboard last updated\s+([A-Za-z]+\s+\d+,?\s+\d+:\d+\s+[A-Z]+)/i);
+    
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error parsing webpage timestamp:', error);
+    return null;
+  }
+}
+
+// Fetch only the timestamp from the webpage (lightweight check)
+async function fetchWebpageTimestamp(): Promise<string | null> {
+  try {
+    const response = await fetch('https://www.pokerstrategy.com/HSCGWP2025/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      signal: AbortSignal.timeout(5000) // 5 second timeout for quick check
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    return parseWebpageTimestamp(html);
+  } catch (error) {
+    console.error('Error fetching webpage timestamp:', error);
+    return null;
+  }
+}
 
 // Input sanitization function
 function sanitizeString(input: string): string {
@@ -89,16 +135,44 @@ export async function GET(request: Request) {
     );
   }
 
-  // Check cache
-  const now = Date.now();
-  if (cachedData && (now - cacheTimestamp) < CACHE_TTL) {
-    logRequest(ip, 'success', 'served from cache');
-    return NextResponse.json(cachedData, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-        'X-Cache': 'HIT'
+  // Check if we have cached data
+  if (cachedData) {
+    // First, do a quick check to see if the webpage has been updated
+    const currentWebpageTimestamp = await fetchWebpageTimestamp();
+    
+    if (currentWebpageTimestamp && currentWebpageTimestamp === cachedData.webpageTimestamp) {
+      // Webpage hasn't been updated, serve from cache
+      logRequest(ip, 'success', 'served from cache (webpage unchanged)');
+      return NextResponse.json({
+        players: cachedData.players,
+        lastUpdated: cachedData.lastUpdated,
+        webpageTimestamp: cachedData.webpageTimestamp
+      }, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+          'X-Cache': 'HIT',
+          'X-Cache-Reason': 'webpage-unchanged'
+        }
+      });
+    } else if (!currentWebpageTimestamp) {
+      // If we couldn't fetch the timestamp, use time-based cache as fallback
+      const now = Date.now();
+      if ((now - cacheTimestamp) < CACHE_TTL) {
+        logRequest(ip, 'success', 'served from cache (time-based fallback)');
+        return NextResponse.json({
+          players: cachedData.players,
+          lastUpdated: cachedData.lastUpdated,
+          webpageTimestamp: cachedData.webpageTimestamp
+        }, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+            'X-Cache': 'HIT',
+            'X-Cache-Reason': 'time-based-fallback'
+          }
+        });
       }
-    });
+    }
+    // If we get here, the webpage has been updated or cache expired, so fetch fresh data
   }
 
   try {
@@ -121,6 +195,9 @@ export async function GET(request: Request) {
       logRequest(ip, 'error', 'Invalid HTML response');
       throw new Error('Invalid response from external source');
     }
+
+    // Extract the webpage timestamp
+    const webpageTimestamp = parseWebpageTimestamp(html);
 
     const $ = cheerio.load(html);
     
@@ -171,18 +248,21 @@ export async function GET(request: Request) {
       throw new Error('No player data found in response');
     }
 
-    // Cache the result
-    const responseData = {
+    // Cache the result with webpage timestamp
+    cachedData = {
       players,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      webpageTimestamp: webpageTimestamp || new Date().toISOString()
     };
-    
-    cachedData = responseData;
     cacheTimestamp = Date.now();
 
-    logRequest(ip, 'success', `${players.length} players fetched`);
+    logRequest(ip, 'success', `${players.length} players fetched, webpage timestamp: ${webpageTimestamp || 'unknown'}`);
 
-    return NextResponse.json(responseData, {
+    return NextResponse.json({
+      players: cachedData.players,
+      lastUpdated: cachedData.lastUpdated,
+      webpageTimestamp: cachedData.webpageTimestamp
+    }, {
       headers: {
         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
         'X-Cache': 'MISS'
@@ -196,7 +276,9 @@ export async function GET(request: Request) {
     if (cachedData) {
       console.warn('Returning stale cached data due to error:', errorMessage);
       return NextResponse.json({
-        ...cachedData,
+        players: cachedData.players,
+        lastUpdated: cachedData.lastUpdated,
+        webpageTimestamp: cachedData.webpageTimestamp,
         warning: 'Using cached data due to temporary fetch error'
       }, {
         headers: {

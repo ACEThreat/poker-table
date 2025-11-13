@@ -22,6 +22,7 @@ export default function Home() {
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [webpageTimestamp, setWebpageTimestamp] = useState<string>('');
 
   useEffect(() => {
     fetchData();
@@ -38,6 +39,7 @@ export default function Home() {
       const data = await response.json();
       setPlayers(data.players || []);
       setLastUpdated(data.lastUpdated || '');
+      setWebpageTimestamp(data.webpageTimestamp || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -100,9 +102,14 @@ export default function Home() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">BGCWC-Table</h1>
           <p className="text-gray-400 text-sm">Leaderboard - Live Data</p>
-          {lastUpdated && (
+          {webpageTimestamp && (
             <p className="text-gray-500 text-xs mt-1">
-              Last updated: {new Date(lastUpdated).toLocaleString()}
+              Leaderboard last updated: {webpageTimestamp}
+            </p>
+          )}
+          {lastUpdated && (
+            <p className="text-gray-600 text-xs">
+              Data fetched: {new Date(lastUpdated).toLocaleString()}
             </p>
           )}
         </div>
