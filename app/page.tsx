@@ -99,9 +99,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-black text-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">BGCWC-Table</h1>
-          <p className="text-gray-400 text-sm">Leaderboard - Live Data</p>
+        <div className="mb-8 text-center border-b border-gray-800 pb-8">
+          <div className="mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-transparent bg-clip-text">
+              Better Cash Game World Championship
+            </h1>
+            <h2 className="text-2xl md:text-3xl font-semibold text-gray-300 mb-4">
+              Results
+            </h2>
+          </div>
+          <div className="text-gray-400 text-sm space-y-1 mb-4">
+            <p>Created by Shane &quot;KCC Tech Support&quot;</p>
+            <p className="text-gray-500">For Kolde&apos;s Calorie Counters Discord</p>
+          </div>
           {webpageTimestamp && (
             <p className="text-gray-500 text-xs mt-1">
               Leaderboard last updated: {webpageTimestamp}

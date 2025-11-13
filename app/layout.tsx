@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BGCWC-Table",
-  description: "Live poker leaderboard with sortable and filterable data",
+  title: "Better Cash Game World Championship Results",
+  description: "Live poker leaderboard for Kolde's Calorie Counters Discord",
 };
 
 export default function RootLayout({
