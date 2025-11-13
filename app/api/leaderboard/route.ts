@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { put, list } from '@vercel/blob';
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -18,6 +17,7 @@ interface PlayerData {
   evBB100: number;
   won: number;
   hands: number;
+  countryCode?: string; // ISO 3166-1 alpha-2 country code
   // Comparison fields (differences from previous day)
   rankChange?: number;
   evWonChange?: number;
@@ -42,48 +42,107 @@ interface HistoricalSnapshot {
 let cachedData: CachedData | null = null;
 let cacheTimestamp = 0;
 
-// Historical data cache directory
-const CACHE_DIR = path.join(process.cwd(), '.cache', 'leaderboard');
-const SNAPSHOTS_DIR = path.join(CACHE_DIR, 'snapshots');
+// Country mapping file (still using filesystem for config)
+import { promises as fs } from 'fs';
+import path from 'path';
+const COUNTRIES_FILE = path.join(process.cwd(), 'config', 'countries.json');
 
-// Ensure cache directory exists
-async function ensureCacheDir() {
+// Load country mappings from config file
+async function loadCountryMappings(): Promise<Record<string, string>> {
   try {
-    await fs.mkdir(SNAPSHOTS_DIR, { recursive: true });
+    const data = await fs.readFile(COUNTRIES_FILE, 'utf-8');
+    return JSON.parse(data);
   } catch (error) {
-    console.error('Error creating cache directory:', error);
+    // If file doesn't exist or is invalid, return empty object
+    return {};
   }
 }
 
-// Get snapshot file path for a specific date
-function getSnapshotPath(date: string): string {
-  return path.join(SNAPSHOTS_DIR, `${date}.json`);
+// Save country mappings to config file
+async function saveCountryMappings(mappings: Record<string, string>) {
+  try {
+    // Ensure config directory exists
+    const configDir = path.dirname(COUNTRIES_FILE);
+    await fs.mkdir(configDir, { recursive: true });
+    
+    // Write with pretty formatting for easy manual editing
+    await fs.writeFile(COUNTRIES_FILE, JSON.stringify(mappings, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Error saving country mappings:', error);
+  }
 }
 
-// Get all available snapshot dates
+// Merge country codes into player data and update mappings for new players
+async function mergeCountryCodes(players: PlayerData[]): Promise<PlayerData[]> {
+  const countryMappings = await loadCountryMappings();
+  let needsUpdate = false;
+  
+  // Check for new players and add them to mapping with null country code
+  for (const player of players) {
+    if (!(player.name in countryMappings)) {
+      countryMappings[player.name] = null as any; // Will be manually assigned later
+      needsUpdate = true;
+    }
+  }
+  
+  // Save updated mappings if new players were found
+  if (needsUpdate) {
+    await saveCountryMappings(countryMappings);
+    console.log(`Added ${players.filter(p => !(p.name in countryMappings)).length} new player(s) to country mappings`);
+  }
+  
+  // Merge country codes into player data
+  return players.map(player => ({
+    ...player,
+    countryCode: countryMappings[player.name] || undefined
+  }));
+}
+
+// Get all available snapshot dates from Vercel Blob
 async function getAvailableSnapshots(): Promise<string[]> {
   try {
-    await ensureCacheDir();
-    const files = await fs.readdir(SNAPSHOTS_DIR);
-    const dates = files
-      .filter(file => file.endsWith('.json'))
-      .map(file => file.replace('.json', ''))
+    const { blobs } = await list({
+      prefix: 'snapshots/',
+    });
+    
+    const dates = blobs
+      .map(blob => {
+        // Extract date from path like "snapshots/2025-11-10.json"
+        const match = blob.pathname.match(/snapshots\/(\d{4}-\d{2}-\d{2})\.json$/);
+        return match ? match[1] : null;
+      })
+      .filter((date): date is string => date !== null)
       .sort()
       .reverse(); // Most recent first
+    
     return dates;
   } catch (error) {
+    console.error('Error listing snapshots from Blob:', error);
     return [];
   }
 }
 
-// Load snapshot for a specific date
+// Load snapshot for a specific date from Vercel Blob
 async function loadSnapshot(date: string): Promise<HistoricalSnapshot | null> {
   try {
-    const snapshotPath = getSnapshotPath(date);
-    const data = await fs.readFile(snapshotPath, 'utf-8');
-    const snapshot: HistoricalSnapshot = JSON.parse(data);
+    const { blobs } = await list({
+      prefix: `snapshots/${date}.json`,
+      limit: 1,
+    });
+    
+    if (blobs.length === 0) {
+      return null;
+    }
+    
+    const response = await fetch(blobs[0].url);
+    if (!response.ok) {
+      return null;
+    }
+    
+    const snapshot: HistoricalSnapshot = await response.json();
     return snapshot;
   } catch (error) {
+    console.error('Error loading snapshot from Blob:', error);
     return null;
   }
 }
@@ -103,14 +162,18 @@ async function loadPreviousDaySnapshot(): Promise<HistoricalSnapshot | null> {
   return null;
 }
 
-// Save snapshot to disk
+// Save snapshot to Vercel Blob
 async function saveSnapshot(snapshot: HistoricalSnapshot) {
   try {
-    await ensureCacheDir();
-    const snapshotPath = getSnapshotPath(snapshot.date);
-    await fs.writeFile(snapshotPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+    const blobPath = `snapshots/${snapshot.date}.json`;
+    await put(blobPath, JSON.stringify(snapshot, null, 2), {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/json',
+    });
+    console.log(`Snapshot saved to Blob: ${blobPath}`);
   } catch (error) {
-    console.error('Error saving snapshot:', error);
+    console.error('Error saving snapshot to Blob:', error);
   }
 }
 
@@ -395,11 +458,14 @@ export async function GET(request: Request) {
       throw new Error('No player data found in response');
     }
 
+    // Merge country codes into player data (and auto-add new players to config)
+    const playersWithCountries = await mergeCountryCodes(players);
+    
     // Load previous day's snapshot for comparison
     const previousSnapshot = await loadPreviousDaySnapshot();
     
     // Calculate changes from previous day
-    const playersWithChanges = calculateChanges(players, previousSnapshot);
+    const playersWithChanges = calculateChanges(playersWithCountries, previousSnapshot);
 
     // Update daily snapshot if needed (non-blocking)
     updateDailySnapshot(players, webpageTimestamp || new Date().toISOString()).catch(err => {

@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const SNAPSHOTS_DIR = path.join(process.cwd(), '.cache', 'leaderboard', 'snapshots');
+import { list } from '@vercel/blob';
 
 interface HistoricalSnapshot {
   date: string;
@@ -12,15 +9,19 @@ interface HistoricalSnapshot {
 
 export async function GET() {
   try {
-    const files = await fs.readdir(SNAPSHOTS_DIR);
+    const { blobs } = await list({
+      prefix: 'snapshots/',
+    });
+
     const snapshots: HistoricalSnapshot[] = [];
 
-    for (const file of files) {
-      if (file.endsWith('.json')) {
+    for (const blob of blobs) {
+      if (blob.pathname.endsWith('.json')) {
         try {
-          const filePath = path.join(SNAPSHOTS_DIR, file);
-          const content = await fs.readFile(filePath, 'utf-8');
-          const data = JSON.parse(content);
+          const response = await fetch(blob.url);
+          if (!response.ok) continue;
+          
+          const data = await response.json();
           
           snapshots.push({
             date: data.date,
@@ -28,7 +29,7 @@ export async function GET() {
             capturedAt: data.capturedAt
           });
         } catch (error) {
-          console.error(`Error reading snapshot ${file}:`, error);
+          console.error(`Error reading snapshot ${blob.pathname}:`, error);
         }
       }
     }
@@ -41,7 +42,7 @@ export async function GET() {
       count: snapshots.length
     });
   } catch (error) {
-    // Directory doesn't exist or is empty
+    console.error('Error fetching snapshots from Blob:', error);
     return NextResponse.json({
       snapshots: [],
       count: 0

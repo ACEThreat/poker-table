@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const SNAPSHOTS_DIR = path.join(process.cwd(), '.cache', 'leaderboard', 'snapshots');
+import { list } from '@vercel/blob';
 
 interface PlayerData {
   rank: number;
@@ -35,11 +32,29 @@ export async function GET(
       );
     }
 
-    const snapshotPath = path.join(SNAPSHOTS_DIR, `${date}.json`);
-    
     try {
-      const content = await fs.readFile(snapshotPath, 'utf-8');
-      const snapshot: HistoricalSnapshot = JSON.parse(content);
+      // Find the blob for this specific date
+      const { blobs } = await list({
+        prefix: `snapshots/${date}.json`,
+        limit: 1,
+      });
+
+      if (blobs.length === 0) {
+        return NextResponse.json(
+          { error: 'Snapshot not found for this date' },
+          { status: 404 }
+        );
+      }
+
+      const response = await fetch(blobs[0].url);
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: 'Snapshot not found for this date' },
+          { status: 404 }
+        );
+      }
+
+      const snapshot: HistoricalSnapshot = await response.json();
       
       return NextResponse.json({
         ...snapshot,
@@ -50,6 +65,7 @@ export async function GET(
         }
       });
     } catch (error) {
+      console.error(`Error fetching snapshot for ${date}:`, error);
       return NextResponse.json(
         { error: 'Snapshot not found for this date' },
         { status: 404 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { countryCodeToFlag } from '@/lib/flags';
 
 type Player = {
   rank: number;
@@ -9,6 +10,7 @@ type Player = {
   evBB100: number;
   won: number;
   hands: number;
+  countryCode?: string; // ISO 3166-1 alpha-2 country code
   // Comparison fields (differences from previous day)
   rankChange?: number;
   evWonChange?: number;
@@ -423,6 +425,11 @@ export default function Home() {
                       </div>
                     </td>
                     <td className="px-4 py-3 font-medium">
+                      {player.countryCode && (
+                        <span className="mr-2" title={player.countryCode}>
+                          {countryCodeToFlag(player.countryCode)}
+                        </span>
+                      )}
                       {player.name === 'SeaLlama' ? (
                         <span className="text-yellow-500 font-bold">🐐 {player.name} 🐐</span>
                       ) : (
