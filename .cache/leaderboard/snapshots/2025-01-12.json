@@ -1,0 +1,31 @@
+{
+  "date": "2025-01-12",
+  "webpageTimestamp": "January 12, 2025, 10:00 AM PST",
+  "players": [
+    {
+      "rank": 1,
+      "name": "SeaLlama",
+      "evWon": 15234.50,
+      "evBB100": 12.45,
+      "won": 14890.25,
+      "hands": 125000
+    },
+    {
+      "rank": 2,
+      "name": "PlayerTwo",
+      "evWon": 12500.00,
+      "evBB100": 10.25,
+      "won": 12300.50,
+      "hands": 110000
+    },
+    {
+      "rank": 3,
+      "name": "PlayerThree",
+      "evWon": 9800.75,
+      "evBB100": 8.50,
+      "won": 9750.00,
+      "hands": 95000
+    }
+  ],
+  "capturedAt": "2025-01-12T18:00:00.000Z"
+}

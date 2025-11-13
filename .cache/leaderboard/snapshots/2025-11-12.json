@@ -1,0 +1,319 @@
+{
+  "date": "2025-11-12",
+  "webpageTimestamp": "November 12, 2025 - Day 3",
+  "players": [
+    {
+      "rank": 1,
+      "name": "JoeAdams",
+      "evWon": 49040.52,
+      "evBB100": 23.68,
+      "won": 78524.76,
+      "hands": 2071
+    },
+    {
+      "rank": 2,
+      "name": "DavyJones922",
+      "evWon": 47925.83,
+      "evBB100": 21.26,
+      "won": 18539.42,
+      "hands": 2254
+    },
+    {
+      "rank": 3,
+      "name": "asianflushie",
+      "evWon": 38548.22,
+      "evBB100": 87.61,
+      "won": 40041.92,
+      "hands": 440
+    },
+    {
+      "rank": 4,
+      "name": "iWasOnly17",
+      "evWon": 30125.16,
+      "evBB100": 19.75,
+      "won": 45675.63,
+      "hands": 1525
+    },
+    {
+      "rank": 5,
+      "name": "jasamgale",
+      "evWon": 23551.94,
+      "evBB100": 13.75,
+      "won": 32069.89,
+      "hands": 1713
+    },
+    {
+      "rank": 6,
+      "name": "Hithisismiketyzon",
+      "evWon": 22264.75,
+      "evBB100": 144.58,
+      "won": 14235.27,
+      "hands": 154
+    },
+    {
+      "rank": 7,
+      "name": "LLinusLLove",
+      "evWon": 19033.19,
+      "evBB100": 4.07,
+      "won": -10964.03,
+      "hands": 4672
+    },
+    {
+      "rank": 8,
+      "name": "FoldOrDieTrying",
+      "evWon": 18929.68,
+      "evBB100": 91.89,
+      "won": 18929.68,
+      "hands": 206
+    },
+    {
+      "rank": 9,
+      "name": "SeaLlama",
+      "evWon": 15920.91,
+      "evBB100": 6.06,
+      "won": 5888.82,
+      "hands": 2626
+    },
+    {
+      "rank": 10,
+      "name": "KayhanMok",
+      "evWon": 15399.74,
+      "evBB100": 136.28,
+      "won": 19940.45,
+      "hands": 113
+    },
+    {
+      "rank": 11,
+      "name": "XIAOJUN7777777",
+      "evWon": 14326.64,
+      "evBB100": 27.82,
+      "won": 9600.83,
+      "hands": 515
+    },
+    {
+      "rank": 12,
+      "name": "Slotto",
+      "evWon": 13845.94,
+      "evBB100": 33.94,
+      "won": 23191.87,
+      "hands": 408
+    },
+    {
+      "rank": 13,
+      "name": "monkey147147",
+      "evWon": 12345.56,
+      "evBB100": 29.12,
+      "won": 12345.56,
+      "hands": 424
+    },
+    {
+      "rank": 14,
+      "name": "SoNamu",
+      "evWon": 9901.33,
+      "evBB100": 12.16,
+      "won": 16900.36,
+      "hands": 814
+    },
+    {
+      "rank": 15,
+      "name": "Enlight",
+      "evWon": 8465.82,
+      "evBB100": 14.13,
+      "won": 14312.18,
+      "hands": 599
+    },
+    {
+      "rank": 16,
+      "name": "JuanRoman",
+      "evWon": 7460.62,
+      "evBB100": 11.36,
+      "won": 11085.57,
+      "hands": 657
+    },
+    {
+      "rank": 17,
+      "name": "Deeeerp",
+      "evWon": 3979.87,
+      "evBB100": 9.43,
+      "won": 8875.71,
+      "hands": 422
+    },
+    {
+      "rank": 18,
+      "name": "Dunkaroos",
+      "evWon": 3267.24,
+      "evBB100": 0.78,
+      "won": 18493.56,
+      "hands": 4193
+    },
+    {
+      "rank": 19,
+      "name": "YolanCohen1",
+      "evWon": 1705.99,
+      "evBB100": 6.91,
+      "won": 1705.99,
+      "hands": 247
+    },
+    {
+      "rank": 20,
+      "name": "TopKat5757",
+      "evWon": 879.53,
+      "evBB100": 2.37,
+      "won": -2286.38,
+      "hands": 371
+    },
+    {
+      "rank": 21,
+      "name": "cmongoodone888",
+      "evWon": 592.03,
+      "evBB100": 1.43,
+      "won": 12492.40,
+      "hands": 413
+    },
+    {
+      "rank": 22,
+      "name": "MadStef",
+      "evWon": 100.00,
+      "evBB100": 20.0,
+      "won": 100.00,
+      "hands": 5
+    },
+    {
+      "rank": 23,
+      "name": "TengerEsz",
+      "evWon": 21.18,
+      "evBB100": 0.31,
+      "won": -4874.66,
+      "hands": 69
+    },
+    {
+      "rank": 24,
+      "name": "Daniiiiil",
+      "evWon": -1100.00,
+      "evBB100": -91.67,
+      "won": -1100.00,
+      "hands": 12
+    },
+    {
+      "rank": 25,
+      "name": "TaxHere",
+      "evWon": -2516.33,
+      "evBB100": -0.85,
+      "won": -29284.75,
+      "hands": 2950
+    },
+    {
+      "rank": 26,
+      "name": "MunEZ",
+      "evWon": -5265.58,
+      "evBB100": -1.8,
+      "won": -15015.56,
+      "hands": 2933
+    },
+    {
+      "rank": 27,
+      "name": "Ohhimark18",
+      "evWon": -8160.01,
+      "evBB100": -11.18,
+      "won": -21401.14,
+      "hands": 730
+    },
+    {
+      "rank": 28,
+      "name": "Doblou",
+      "evWon": -9421.04,
+      "evBB100": -64.97,
+      "won": -9421.04,
+      "hands": 145
+    },
+    {
+      "rank": 29,
+      "name": "BeppeBergomi",
+      "evWon": -10875.47,
+      "evBB100": -61.44,
+      "won": -16284.35,
+      "hands": 177
+    },
+    {
+      "rank": 30,
+      "name": "Lukabrate",
+      "evWon": -11474.67,
+      "evBB100": -3.58,
+      "won": -35938.57,
+      "hands": 3207
+    },
+    {
+      "rank": 31,
+      "name": "Schyllae",
+      "evWon": -16374.48,
+      "evBB100": -11.42,
+      "won": -25213.78,
+      "hands": 1434
+    },
+    {
+      "rank": 32,
+      "name": "Biluzin",
+      "evWon": -23225.49,
+      "evBB100": -64.88,
+      "won": 5893.64,
+      "hands": 358
+    },
+    {
+      "rank": 33,
+      "name": "WhisperTide",
+      "evWon": -23293.37,
+      "evBB100": -27.24,
+      "won": -30548.57,
+      "hands": 855
+    },
+    {
+      "rank": 34,
+      "name": "ILuvAvrilLavigne91",
+      "evWon": -27399.98,
+      "evBB100": -6.0,
+      "won": -8791.51,
+      "hands": 4564
+    },
+    {
+      "rank": 35,
+      "name": "PR0DIGY",
+      "evWon": -27587.52,
+      "evBB100": -13.14,
+      "won": -15826.15,
+      "hands": 2100
+    },
+    {
+      "rank": 36,
+      "name": "yourmomishot",
+      "evWon": -27783.77,
+      "evBB100": -55.46,
+      "won": -29483.29,
+      "hands": 501
+    },
+    {
+      "rank": 37,
+      "name": "TurdSandwich",
+      "evWon": -31831.20,
+      "evBB100": -42.33,
+      "won": -42550.97,
+      "hands": 752
+    },
+    {
+      "rank": 38,
+      "name": "DKaladjurdjevic",
+      "evWon": -57090.67,
+      "evBB100": -39.54,
+      "won": -58840.38,
+      "hands": 1444
+    },
+    {
+      "rank": 39,
+      "name": "riggedeck",
+      "evWon": -74232.11,
+      "evBB100": -11.91,
+      "won": -51018.38,
+      "hands": 6232
+    }
+  ],
+  "capturedAt": "2025-11-12T00:00:00.000Z"
+}

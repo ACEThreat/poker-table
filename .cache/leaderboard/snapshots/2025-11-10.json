@@ -1,0 +1,87 @@
+{
+  "date": "2025-11-10",
+  "webpageTimestamp": "November 10, 2025 - Day 1",
+  "players": [
+    {
+      "rank": 1,
+      "name": "Dunkaroos",
+      "evWon": 28693.31,
+      "evBB100": 35.29,
+      "won": 37696.38,
+      "hands": 813
+    },
+    {
+      "rank": 2,
+      "name": "TaxHere",
+      "evWon": 21234.11,
+      "evBB100": 19.98,
+      "won": -81.57,
+      "hands": 1063
+    },
+    {
+      "rank": 3,
+      "name": "KayhanMok",
+      "evWon": 15399.74,
+      "evBB100": 136.28,
+      "won": 19940.45,
+      "hands": 113
+    },
+    {
+      "rank": 4,
+      "name": "JoeAdams",
+      "evWon": 2153.48,
+      "evBB100": 7.43,
+      "won": 2153.48,
+      "hands": 290
+    },
+    {
+      "rank": 5,
+      "name": "SeaLlama",
+      "evWon": 1626.17,
+      "evBB100": 2.44,
+      "won": 1557.99,
+      "hands": 667
+    },
+    {
+      "rank": 6,
+      "name": "JuanRoman",
+      "evWon": 780.00,
+      "evBB100": 86.67,
+      "won": 780.00,
+      "hands": 9
+    },
+    {
+      "rank": 7,
+      "name": "Lukabrate",
+      "evWon": -6613.50,
+      "evBB100": -73.48,
+      "won": -6613.50,
+      "hands": 90
+    },
+    {
+      "rank": 8,
+      "name": "ILuvAvrilLavigne91",
+      "evWon": -7034.12,
+      "evBB100": -6.53,
+      "won": 323.04,
+      "hands": 1077
+    },
+    {
+      "rank": 9,
+      "name": "DavyJones922",
+      "evWon": -25303.30,
+      "evBB100": -58.84,
+      "won": -43338.22,
+      "hands": 430
+    },
+    {
+      "rank": 10,
+      "name": "riggedeck",
+      "evWon": -30935.89,
+      "evBB100": -29.30,
+      "won": -12418.05,
+      "hands": 1056
+    }
+  ],
+  "capturedAt": "2025-11-10T00:00:00.000Z"
+}
