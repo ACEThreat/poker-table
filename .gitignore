@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# cache (local snapshots - now using Vercel Blob Storage)
+/.cache/
+
 # production
 /build
 

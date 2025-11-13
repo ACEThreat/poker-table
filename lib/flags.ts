@@ -1,9 +1,15 @@
 /**
  * Converts a country code (ISO 3166-1 alpha-2) to a flag emoji
- * @param countryCode - Two-letter country code (e.g., "US", "GB", "CA")
- * @returns Flag emoji or empty string if invalid
+ * @param countryCode - Two-letter country code (e.g., "US", "GB", "CA"), or null for unknown
+ * @returns Flag emoji, "❓" for unknown/null, or empty string if invalid
  */
 export function countryCodeToFlag(countryCode: string | null | undefined): string {
+  // Return "❓" for explicitly null (unknown) country codes
+  if (countryCode === null) {
+    return '❓';
+  }
+  
+  // Return empty string for undefined or invalid codes
   if (!countryCode || countryCode.length !== 2) {
     return '';
   }

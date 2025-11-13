@@ -17,7 +17,7 @@ interface PlayerData {
   evBB100: number;
   won: number;
   hands: number;
-  countryCode?: string; // ISO 3166-1 alpha-2 country code
+  countryCode?: string | null; // ISO 3166-1 alpha-2 country code, null for unknown
   // Comparison fields (differences from previous day)
   rankChange?: number;
   evWonChange?: number;
@@ -42,33 +42,47 @@ interface HistoricalSnapshot {
 let cachedData: CachedData | null = null;
 let cacheTimestamp = 0;
 
-// Country mapping file (still using filesystem for config)
-import { promises as fs } from 'fs';
-import path from 'path';
-const COUNTRIES_FILE = path.join(process.cwd(), 'config', 'countries.json');
+// Country mappings stored in Vercel Blob
+const COUNTRIES_BLOB_PATH = 'countries.json';
 
-// Load country mappings from config file
-async function loadCountryMappings(): Promise<Record<string, string>> {
+// Load country mappings from Vercel Blob
+async function loadCountryMappings(): Promise<Record<string, string | null>> {
   try {
-    const data = await fs.readFile(COUNTRIES_FILE, 'utf-8');
-    return JSON.parse(data);
+    const { blobs } = await list({
+      prefix: COUNTRIES_BLOB_PATH,
+      limit: 1,
+    });
+    
+    if (blobs.length === 0) {
+      console.log('No countries.json found in Blob storage');
+      return {};
+    }
+    
+    const response = await fetch(blobs[0].url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch countries: ${response.statusText}`);
+    }
+    
+    return await response.json();
   } catch (error) {
-    // If file doesn't exist or is invalid, return empty object
+    console.error('Error loading country mappings from Blob:', error);
     return {};
   }
 }
 
-// Save country mappings to config file
-async function saveCountryMappings(mappings: Record<string, string>) {
+// Save country mappings to Vercel Blob
+async function saveCountryMappings(mappings: Record<string, string | null>) {
   try {
-    // Ensure config directory exists
-    const configDir = path.dirname(COUNTRIES_FILE);
-    await fs.mkdir(configDir, { recursive: true });
-    
-    // Write with pretty formatting for easy manual editing
-    await fs.writeFile(COUNTRIES_FILE, JSON.stringify(mappings, null, 2), 'utf-8');
+    await put(COUNTRIES_BLOB_PATH, JSON.stringify(mappings, null, 2), {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/json',
+      cacheControlMaxAge: 0,
+      allowOverwrite: true,
+    });
+    console.log('Country mappings saved to Blob storage');
   } catch (error) {
-    console.error('Error saving country mappings:', error);
+    console.error('Error saving country mappings to Blob:', error);
   }
 }
 
@@ -76,25 +90,30 @@ async function saveCountryMappings(mappings: Record<string, string>) {
 async function mergeCountryCodes(players: PlayerData[]): Promise<PlayerData[]> {
   const countryMappings = await loadCountryMappings();
   let needsUpdate = false;
+  const newPlayers: string[] = [];
   
   // Check for new players and add them to mapping with null country code
   for (const player of players) {
     if (!(player.name in countryMappings)) {
-      countryMappings[player.name] = null as any; // Will be manually assigned later
+      countryMappings[player.name] = null;
       needsUpdate = true;
+      newPlayers.push(player.name);
     }
   }
   
-  // Save updated mappings if new players were found
+  // Save updated mappings if new players were found (non-blocking)
   if (needsUpdate) {
-    await saveCountryMappings(countryMappings);
-    console.log(`Added ${players.filter(p => !(p.name in countryMappings)).length} new player(s) to country mappings`);
+    saveCountryMappings(countryMappings).catch(err => {
+      console.error('Error auto-saving new players to countries:', err);
+    });
+    console.log(`Added ${newPlayers.length} new player(s) to country mappings:`, newPlayers);
   }
   
   // Merge country codes into player data
+  // Note: null values are preserved so they can be shown as "?" emoji
   return players.map(player => ({
     ...player,
-    countryCode: countryMappings[player.name] || undefined
+    countryCode: countryMappings[player.name] || null
   }));
 }
 
