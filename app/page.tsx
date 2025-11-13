@@ -185,12 +185,21 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 text-center border-b border-gray-800 pb-8">
           <div className="mb-4">
-            <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-transparent bg-clip-text">
-              Better Cash Game World Championship
-            </h1>
-            <h2 className="text-2xl md:text-3xl font-semibold text-gray-300 mb-4">
-              Results
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <span className="text-4xl md:text-5xl">🏆</span>
+              <h1 className="text-4xl md:text-6xl font-extrabold bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-transparent bg-clip-text animate-pulse">
+                Better.gg
+              </h1>
+              <span className="text-4xl md:text-5xl">🏆</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 text-transparent bg-clip-text">
+              Cash Game World Championship
             </h2>
+            <div className="flex items-center justify-center gap-2 text-xl md:text-2xl font-semibold text-gray-300">
+              <span className="text-2xl">♠️</span>
+              <span>Leaderboard</span>
+              <span className="text-2xl">♥️</span>
+            </div>
           </div>
           <div className="text-gray-400 text-sm space-y-1 mb-4">
             <p>Created by Shane &quot;KCC Tech Support&quot;</p>
