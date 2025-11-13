@@ -43,6 +43,7 @@ export default function Home() {
   const [availableDates, setAvailableDates] = useState<HistoricalSnapshot[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isHistoricalView, setIsHistoricalView] = useState(false);
+  const [showTipSection, setShowTipSection] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -194,23 +195,45 @@ export default function Home() {
             <p className="text-gray-500">For Kolde&apos;s Calorie Counters Discord</p>
           </div>
           
-          {/* Tip Me Section */}
-          <div className="mt-4 mb-6 p-4 bg-gradient-to-r from-purple-900/20 via-blue-900/20 to-purple-900/20 border border-purple-700/30 rounded-lg max-w-2xl mx-auto">
-            <p className="text-purple-300 text-sm font-semibold mb-3 flex items-center justify-center gap-2">
-              <span>💝</span>
-              <span>Tip Me</span>
-              <span>💝</span>
-            </p>
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between gap-3 bg-black/30 p-2 rounded">
-                <span className="text-gray-400 font-medium">ETH:</span>
-                <code className="text-purple-300 font-mono text-[10px] sm:text-xs break-all">0x8c06eA5A880f74A2DC3e00C1d509D47B73bbDB09</code>
+          {/* Tip Me Section - Toggleable */}
+          <div className="mt-4 mb-4">
+            {!showTipSection ? (
+              <button
+                onClick={() => setShowTipSection(true)}
+                className="mx-auto px-3 py-1.5 bg-purple-900/20 hover:bg-purple-900/30 border border-purple-700/30 rounded-lg transition-all flex items-center gap-2 text-purple-300/70 hover:text-purple-300 text-xs"
+                title="Show tip addresses"
+              >
+                <span>💝</span>
+                <span>Tip</span>
+              </button>
+            ) : (
+              <div className="p-4 bg-gradient-to-r from-purple-900/20 via-blue-900/20 to-purple-900/20 border border-purple-700/30 rounded-lg max-w-2xl mx-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-purple-300 text-sm font-semibold flex items-center gap-2">
+                    <span>💝</span>
+                    <span>Tip Me</span>
+                    <span>💝</span>
+                  </p>
+                  <button
+                    onClick={() => setShowTipSection(false)}
+                    className="text-gray-500 hover:text-gray-400 transition-colors text-sm"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-3 bg-black/30 p-2 rounded">
+                    <span className="text-gray-400 font-medium">ETH:</span>
+                    <code className="text-purple-300 font-mono text-[10px] sm:text-xs break-all">0x8c06eA5A880f74A2DC3e00C1d509D47B73bbDB09</code>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 bg-black/30 p-2 rounded">
+                    <span className="text-gray-400 font-medium">BTC:</span>
+                    <code className="text-purple-300 font-mono text-[10px] sm:text-xs break-all">bc1q9e7pdjsw4p7ytxggv0q0tu4n4z2njjz5wxncad</code>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-3 bg-black/30 p-2 rounded">
-                <span className="text-gray-400 font-medium">BTC:</span>
-                <code className="text-purple-300 font-mono text-[10px] sm:text-xs break-all">bc1q9e7pdjsw4p7ytxggv0q0tu4n4z2njjz5wxncad</code>
-              </div>
-            </div>
+            )}
           </div>
           {webpageTimestamp && (
             <p className="text-gray-500 text-xs mt-1">
