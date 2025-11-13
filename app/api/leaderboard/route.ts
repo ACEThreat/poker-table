@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -16,6 +18,12 @@ interface PlayerData {
   evBB100: number;
   won: number;
   hands: number;
+  // Comparison fields (differences from previous day)
+  rankChange?: number;
+  evWonChange?: number;
+  evBB100Change?: number;
+  wonChange?: number;
+  handsChange?: number;
 }
 
 interface CachedData {
@@ -24,8 +32,147 @@ interface CachedData {
   webpageTimestamp: string; // The actual timestamp from the webpage
 }
 
+interface HistoricalSnapshot {
+  date: string; // YYYY-MM-DD
+  webpageTimestamp: string;
+  players: PlayerData[];
+  capturedAt: string; // ISO timestamp
+}
+
 let cachedData: CachedData | null = null;
 let cacheTimestamp = 0;
+
+// Historical data cache directory
+const CACHE_DIR = path.join(process.cwd(), '.cache', 'leaderboard');
+const SNAPSHOTS_DIR = path.join(CACHE_DIR, 'snapshots');
+
+// Ensure cache directory exists
+async function ensureCacheDir() {
+  try {
+    await fs.mkdir(SNAPSHOTS_DIR, { recursive: true });
+  } catch (error) {
+    console.error('Error creating cache directory:', error);
+  }
+}
+
+// Get snapshot file path for a specific date
+function getSnapshotPath(date: string): string {
+  return path.join(SNAPSHOTS_DIR, `${date}.json`);
+}
+
+// Get all available snapshot dates
+async function getAvailableSnapshots(): Promise<string[]> {
+  try {
+    await ensureCacheDir();
+    const files = await fs.readdir(SNAPSHOTS_DIR);
+    const dates = files
+      .filter(file => file.endsWith('.json'))
+      .map(file => file.replace('.json', ''))
+      .sort()
+      .reverse(); // Most recent first
+    return dates;
+  } catch (error) {
+    return [];
+  }
+}
+
+// Load snapshot for a specific date
+async function loadSnapshot(date: string): Promise<HistoricalSnapshot | null> {
+  try {
+    const snapshotPath = getSnapshotPath(date);
+    const data = await fs.readFile(snapshotPath, 'utf-8');
+    const snapshot: HistoricalSnapshot = JSON.parse(data);
+    return snapshot;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Load the most recent snapshot (for comparison)
+async function loadPreviousDaySnapshot(): Promise<HistoricalSnapshot | null> {
+  const dates = await getAvailableSnapshots();
+  const today = getTodayDate();
+  
+  // Find the most recent snapshot that's not today
+  for (const date of dates) {
+    if (date !== today) {
+      return loadSnapshot(date);
+    }
+  }
+  
+  return null;
+}
+
+// Save snapshot to disk
+async function saveSnapshot(snapshot: HistoricalSnapshot) {
+  try {
+    await ensureCacheDir();
+    const snapshotPath = getSnapshotPath(snapshot.date);
+    await fs.writeFile(snapshotPath, JSON.stringify(snapshot, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Error saving snapshot:', error);
+  }
+}
+
+// Get today's date in YYYY-MM-DD format (UTC)
+function getTodayDate(): string {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+
+// Compare current data with previous snapshot and add change indicators
+function calculateChanges(currentPlayers: PlayerData[], previousSnapshot: HistoricalSnapshot | null): PlayerData[] {
+  if (!previousSnapshot) {
+    return currentPlayers;
+  }
+
+  const previousMap = new Map<string, PlayerData>();
+  previousSnapshot.players.forEach(player => {
+    previousMap.set(player.name, player);
+  });
+
+  return currentPlayers.map(currentPlayer => {
+    const previousPlayer = previousMap.get(currentPlayer.name);
+    
+    if (!previousPlayer) {
+      // New player, no comparison available
+      return currentPlayer;
+    }
+
+    return {
+      ...currentPlayer,
+      rankChange: previousPlayer.rank - currentPlayer.rank, // Positive if moved up
+      evWonChange: currentPlayer.evWon - previousPlayer.evWon,
+      evBB100Change: currentPlayer.evBB100 - previousPlayer.evBB100,
+      wonChange: currentPlayer.won - previousPlayer.won,
+      handsChange: currentPlayer.hands - previousPlayer.hands
+    };
+  });
+}
+
+// Check if we need to update the daily snapshot
+async function updateDailySnapshot(players: PlayerData[], webpageTimestamp: string) {
+  const todayDate = getTodayDate();
+  const existingSnapshot = await loadSnapshot(todayDate);
+
+  // Only save a new snapshot if today's snapshot doesn't exist yet
+  if (!existingSnapshot) {
+    const newSnapshot: HistoricalSnapshot = {
+      date: todayDate,
+      webpageTimestamp,
+      players: players.map(p => ({
+        rank: p.rank,
+        name: p.name,
+        evWon: p.evWon,
+        evBB100: p.evBB100,
+        won: p.won,
+        hands: p.hands
+      })),
+      capturedAt: new Date().toISOString()
+    };
+    await saveSnapshot(newSnapshot);
+  }
+}
 
 // Parse the "Leaderboard last updated" timestamp from the webpage
 function parseWebpageTimestamp(html: string): string | null {
@@ -248,9 +395,20 @@ export async function GET(request: Request) {
       throw new Error('No player data found in response');
     }
 
+    // Load previous day's snapshot for comparison
+    const previousSnapshot = await loadPreviousDaySnapshot();
+    
+    // Calculate changes from previous day
+    const playersWithChanges = calculateChanges(players, previousSnapshot);
+
+    // Update daily snapshot if needed (non-blocking)
+    updateDailySnapshot(players, webpageTimestamp || new Date().toISOString()).catch(err => {
+      console.error('Error updating daily snapshot:', err);
+    });
+
     // Cache the result with webpage timestamp
     cachedData = {
-      players,
+      players: playersWithChanges,
       lastUpdated: new Date().toISOString(),
       webpageTimestamp: webpageTimestamp || new Date().toISOString()
     };
@@ -261,7 +419,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       players: cachedData.players,
       lastUpdated: cachedData.lastUpdated,
-      webpageTimestamp: cachedData.webpageTimestamp
+      webpageTimestamp: cachedData.webpageTimestamp,
+      hasPreviousDayData: previousSnapshot !== null,
+      previousDayDate: previousSnapshot?.date || null
     }, {
       headers: {
         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
