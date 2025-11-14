@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { list } from '@vercel/blob';
+import { HistoricalSnapshotSchema, HistoricalDataResponseSchema, safeValidate } from '@/lib/schemas';
 
 interface PlayerData {
   rank: number;
@@ -54,12 +55,42 @@ export async function GET(
         );
       }
 
-      const snapshot: HistoricalSnapshot = await response.json();
+      const data = await response.json();
       
-      return NextResponse.json({
-        ...snapshot,
+      // Validate snapshot data
+      const validatedSnapshot = safeValidate(
+        HistoricalSnapshotSchema,
+        data,
+        `Historical snapshot for date ${date}`
+      );
+      
+      if (!validatedSnapshot) {
+        return NextResponse.json(
+          { error: 'Invalid snapshot data' },
+          { status: 500 }
+        );
+      }
+      
+      const responseData = {
+        ...validatedSnapshot,
         isHistorical: true
-      }, {
+      };
+      
+      // Validate the API response
+      const validatedResponse = safeValidate(
+        HistoricalDataResponseSchema,
+        responseData,
+        'Historical data API response'
+      );
+      
+      if (!validatedResponse) {
+        return NextResponse.json(
+          { error: 'Failed to validate response data' },
+          { status: 500 }
+        );
+      }
+      
+      return NextResponse.json(validatedResponse, {
         headers: {
           'Cache-Control': 'public, max-age=86400', // Cache for 1 day
         }

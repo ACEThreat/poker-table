@@ -1,351 +1,25 @@
+/**
+ * Leaderboard API route handler
+ * Provides current leaderboard data with caching and rate limiting
+ */
+
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
-import { put, list } from '@vercel/blob';
+import { MAX_REQUESTS_PER_WINDOW } from '@/lib/api/constants';
+import { checkRateLimit, logRequest } from '@/lib/api/rate-limiting';
+import { getCachedLeaderboardData } from '@/lib/api/data-fetcher';
+import { fetchWebpageTimestamp } from '@/lib/api/data-parsing';
+import { loadPreviousDaySnapshot } from '@/lib/api/snapshot-management';
+import { CachedData } from '@/lib/api/types';
+import { LeaderboardResponseSchema, safeValidate } from '@/lib/schemas';
 
-// Rate limiting configuration
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 10;
-const requestLog = new Map<string, number[]>();
-
-// Caching configuration
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-interface PlayerData {
-  rank: number;
-  name: string;
-  evWon: number;
-  evBB100: number;
-  won: number;
-  hands: number;
-  countryCode?: string | null; // ISO 3166-1 alpha-2 country code, null for unknown
-  // Comparison fields (differences from previous day)
-  rankChange?: number;
-  evWonChange?: number;
-  evBB100Change?: number;
-  wonChange?: number;
-  handsChange?: number;
-}
-
-interface CachedData {
-  players: PlayerData[];
-  lastUpdated: string;
-  webpageTimestamp: string; // The actual timestamp from the webpage
-}
-
-interface HistoricalSnapshot {
-  date: string; // YYYY-MM-DD
-  webpageTimestamp: string;
-  players: PlayerData[];
-  capturedAt: string; // ISO timestamp
-}
-
-let cachedData: CachedData | null = null;
-let cacheTimestamp = 0;
-
-// Country mappings stored in Vercel Blob
-const COUNTRIES_BLOB_PATH = 'countries.json';
-
-// Load country mappings from Vercel Blob
-async function loadCountryMappings(): Promise<Record<string, string | null>> {
-  try {
-    const { blobs } = await list({
-      prefix: COUNTRIES_BLOB_PATH,
-      limit: 1,
-    });
-    
-    if (blobs.length === 0) {
-      console.log('No countries.json found in Blob storage');
-      return {};
-    }
-    
-    const response = await fetch(blobs[0].url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch countries: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error loading country mappings from Blob:', error);
-    return {};
-  }
-}
-
-// Save country mappings to Vercel Blob
-async function saveCountryMappings(mappings: Record<string, string | null>) {
-  try {
-    await put(COUNTRIES_BLOB_PATH, JSON.stringify(mappings, null, 2), {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: 'application/json',
-      cacheControlMaxAge: 0,
-      allowOverwrite: true,
-    });
-    console.log('Country mappings saved to Blob storage');
-  } catch (error) {
-    console.error('Error saving country mappings to Blob:', error);
-  }
-}
-
-// Merge country codes into player data and update mappings for new players
-async function mergeCountryCodes(players: PlayerData[]): Promise<PlayerData[]> {
-  const countryMappings = await loadCountryMappings();
-  let needsUpdate = false;
-  const newPlayers: string[] = [];
-  
-  // Check for new players and add them to mapping with null country code
-  for (const player of players) {
-    if (!(player.name in countryMappings)) {
-      countryMappings[player.name] = null;
-      needsUpdate = true;
-      newPlayers.push(player.name);
-    }
-  }
-  
-  // Save updated mappings if new players were found (non-blocking)
-  if (needsUpdate) {
-    saveCountryMappings(countryMappings).catch(err => {
-      console.error('Error auto-saving new players to countries:', err);
-    });
-    console.log(`Added ${newPlayers.length} new player(s) to country mappings:`, newPlayers);
-  }
-  
-  // Merge country codes into player data
-  // Note: null values are preserved so they can be shown as "?" emoji
-  return players.map(player => ({
-    ...player,
-    countryCode: countryMappings[player.name] || null
-  }));
-}
-
-// Get all available snapshot dates from Vercel Blob
-async function getAvailableSnapshots(): Promise<string[]> {
-  try {
-    const { blobs } = await list({
-      prefix: 'snapshots/',
-    });
-    
-    const dates = blobs
-      .map(blob => {
-        // Extract date from path like "snapshots/2025-11-10.json"
-        const match = blob.pathname.match(/snapshots\/(\d{4}-\d{2}-\d{2})\.json$/);
-        return match ? match[1] : null;
-      })
-      .filter((date): date is string => date !== null)
-      .sort()
-      .reverse(); // Most recent first
-    
-    return dates;
-  } catch (error) {
-    console.error('Error listing snapshots from Blob:', error);
-    return [];
-  }
-}
-
-// Load snapshot for a specific date from Vercel Blob
-async function loadSnapshot(date: string): Promise<HistoricalSnapshot | null> {
-  try {
-    const { blobs } = await list({
-      prefix: `snapshots/${date}.json`,
-      limit: 1,
-    });
-    
-    if (blobs.length === 0) {
-      return null;
-    }
-    
-    const response = await fetch(blobs[0].url);
-    if (!response.ok) {
-      return null;
-    }
-    
-    const snapshot: HistoricalSnapshot = await response.json();
-    return snapshot;
-  } catch (error) {
-    console.error('Error loading snapshot from Blob:', error);
-    return null;
-  }
-}
-
-// Load the most recent snapshot (for comparison)
-async function loadPreviousDaySnapshot(): Promise<HistoricalSnapshot | null> {
-  const dates = await getAvailableSnapshots();
-  const today = getTodayDate();
-  
-  // Find the most recent snapshot that's not today
-  for (const date of dates) {
-    if (date !== today) {
-      return loadSnapshot(date);
-    }
-  }
-  
-  return null;
-}
-
-// Save snapshot to Vercel Blob
-async function saveSnapshot(snapshot: HistoricalSnapshot) {
-  try {
-    const blobPath = `snapshots/${snapshot.date}.json`;
-    await put(blobPath, JSON.stringify(snapshot, null, 2), {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: 'application/json',
-    });
-    console.log(`Snapshot saved to Blob: ${blobPath}`);
-  } catch (error) {
-    console.error('Error saving snapshot to Blob:', error);
-  }
-}
-
-// Get today's date in YYYY-MM-DD format (UTC)
-function getTodayDate(): string {
-  const now = new Date();
-  return now.toISOString().split('T')[0];
-}
-
-// Compare current data with previous snapshot and add change indicators
-function calculateChanges(currentPlayers: PlayerData[], previousSnapshot: HistoricalSnapshot | null): PlayerData[] {
-  if (!previousSnapshot) {
-    return currentPlayers;
-  }
-
-  const previousMap = new Map<string, PlayerData>();
-  previousSnapshot.players.forEach(player => {
-    previousMap.set(player.name, player);
-  });
-
-  return currentPlayers.map(currentPlayer => {
-    const previousPlayer = previousMap.get(currentPlayer.name);
-    
-    if (!previousPlayer) {
-      // New player, no comparison available
-      return currentPlayer;
-    }
-
-    return {
-      ...currentPlayer,
-      rankChange: previousPlayer.rank - currentPlayer.rank, // Positive if moved up
-      evWonChange: currentPlayer.evWon - previousPlayer.evWon,
-      evBB100Change: currentPlayer.evBB100 - previousPlayer.evBB100,
-      wonChange: currentPlayer.won - previousPlayer.won,
-      handsChange: currentPlayer.hands - previousPlayer.hands
-    };
-  });
-}
-
-// Check if we need to update the daily snapshot
-async function updateDailySnapshot(players: PlayerData[], webpageTimestamp: string) {
-  const todayDate = getTodayDate();
-  const existingSnapshot = await loadSnapshot(todayDate);
-
-  // Only save a new snapshot if today's snapshot doesn't exist yet
-  if (!existingSnapshot) {
-    const newSnapshot: HistoricalSnapshot = {
-      date: todayDate,
-      webpageTimestamp,
-      players: players.map(p => ({
-        rank: p.rank,
-        name: p.name,
-        evWon: p.evWon,
-        evBB100: p.evBB100,
-        won: p.won,
-        hands: p.hands
-      })),
-      capturedAt: new Date().toISOString()
-    };
-    await saveSnapshot(newSnapshot);
-  }
-}
-
-// Parse the "Leaderboard last updated" timestamp from the webpage
-function parseWebpageTimestamp(html: string): string | null {
-  try {
-    const $ = cheerio.load(html);
-    // Look for the text containing "Leaderboard last updated"
-    const timestampText = $('body').text();
-    const match = timestampText.match(/Leaderboard last updated\s+([A-Za-z]+\s+\d+,?\s+\d+:\d+\s+[A-Z]+)/i);
-    
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-    return null;
-  } catch (error) {
-    console.error('Error parsing webpage timestamp:', error);
-    return null;
-  }
-}
-
-// Fetch only the timestamp from the webpage (lightweight check)
-async function fetchWebpageTimestamp(): Promise<string | null> {
-  try {
-    const response = await fetch('https://www.pokerstrategy.com/HSCGWP2025/', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      signal: AbortSignal.timeout(5000) // 5 second timeout for quick check
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const html = await response.text();
-    return parseWebpageTimestamp(html);
-  } catch (error) {
-    console.error('Error fetching webpage timestamp:', error);
-    return null;
-  }
-}
-
-// Input sanitization function
-function sanitizeString(input: string): string {
-  return input
-    .replace(/[<>]/g, '') // Remove potential HTML tags
-    .replace(/javascript:/gi, '') // Remove JavaScript protocol
-    .replace(/on\w+=/gi, '') // Remove event handlers
-    .trim()
-    .slice(0, 200); // Limit length
-}
-
-function sanitizeNumber(input: string, isInteger = false): number {
-  const cleaned = input.replace(/[^0-9.-]/g, '');
-  const num = isInteger ? parseInt(cleaned) : parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
-}
-
-// Rate limiting middleware
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const requests = requestLog.get(ip) || [];
-  
-  // Remove old requests outside the window
-  const recentRequests = requests.filter(timestamp => now - timestamp < RATE_LIMIT_WINDOW);
-  
-  if (recentRequests.length >= MAX_REQUESTS_PER_WINDOW) {
-    return false; // Rate limit exceeded
-  }
-  
-  recentRequests.push(now);
-  requestLog.set(ip, recentRequests);
-  
-  return true;
-}
-
-// Request logging
-function logRequest(ip: string, status: 'success' | 'error' | 'rate-limited', details?: string) {
-  const timestamp = new Date().toISOString();
-  console.log(JSON.stringify({
-    timestamp,
-    ip,
-    status,
-    endpoint: '/api/leaderboard',
-    details: details || 'N/A'
-  }));
-}
-
+/**
+ * GET handler for leaderboard data
+ * Returns current leaderboard with player rankings, stats, and change indicators
+ */
 export async function GET(request: Request) {
   // Get client IP for rate limiting
-  const ip = request.headers.get('x-forwarded-for') || 
-             request.headers.get('x-real-ip') || 
+  const ip = request.headers.get('x-forwarded-for') ||
+             request.headers.get('x-real-ip') ||
              'unknown';
   
   // Rate limiting check
@@ -353,7 +27,7 @@ export async function GET(request: Request) {
     logRequest(ip, 'rate-limited');
     return NextResponse.json(
       { error: 'Too many requests. Please try again later.' },
-      { 
+      {
         status: 429,
         headers: {
           'Retry-After': '60',
@@ -364,176 +38,80 @@ export async function GET(request: Request) {
     );
   }
 
-  // Check if we have cached data
-  if (cachedData) {
-    // First, do a quick check to see if the webpage has been updated
-    const currentWebpageTimestamp = await fetchWebpageTimestamp();
-    
-    if (currentWebpageTimestamp && currentWebpageTimestamp === cachedData.webpageTimestamp) {
-      // Webpage hasn't been updated, serve from cache
-      logRequest(ip, 'success', 'served from cache (webpage unchanged)');
-      return NextResponse.json({
-        players: cachedData.players,
-        lastUpdated: cachedData.lastUpdated,
-        webpageTimestamp: cachedData.webpageTimestamp
-      }, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-          'X-Cache': 'HIT',
-          'X-Cache-Reason': 'webpage-unchanged'
-        }
-      });
-    } else if (!currentWebpageTimestamp) {
-      // If we couldn't fetch the timestamp, use time-based cache as fallback
-      const now = Date.now();
-      if ((now - cacheTimestamp) < CACHE_TTL) {
-        logRequest(ip, 'success', 'served from cache (time-based fallback)');
-        return NextResponse.json({
-          players: cachedData.players,
-          lastUpdated: cachedData.lastUpdated,
-          webpageTimestamp: cachedData.webpageTimestamp
-        }, {
-          headers: {
-            'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-            'X-Cache': 'HIT',
-            'X-Cache-Reason': 'time-based-fallback'
-          }
-        });
-      }
-    }
-    // If we get here, the webpage has been updated or cache expired, so fetch fresh data
-  }
-
   try {
-    const response = await fetch('https://www.pokerstrategy.com/HSCGWP2025/', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      signal: AbortSignal.timeout(10000) // 10 second timeout
-    });
+    // Try to get cached data first (Next.js will handle cache invalidation)
+    let cachedData: CachedData;
+    let cacheStatus = 'MISS';
+    let cacheReason = 'initial-fetch';
 
-    if (!response.ok) {
-      logRequest(ip, 'error', `HTTP ${response.status} from external source`);
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const html = await response.text();
-    
-    // Validate HTML content
-    if (!html || html.length < 100) {
-      logRequest(ip, 'error', 'Invalid HTML response');
-      throw new Error('Invalid response from external source');
-    }
-
-    // Extract the webpage timestamp
-    const webpageTimestamp = parseWebpageTimestamp(html);
-
-    const $ = cheerio.load(html);
-    
-    const players: PlayerData[] = [];
-
-    // Find the table and parse rows
-    $('table.tableDefault tbody tr').each((index, element) => {
-      const cells = $(element).find('td');
-      if (cells.length >= 6) {
-        const nameRaw = $(cells[1]).text().trim();
-        const evWonText = $(cells[2]).text().trim();
-        const evBB100Text = $(cells[3]).text().trim();
-        const wonText = $(cells[4]).text().trim();
-        const handsText = $(cells[5]).text().trim();
-
-        // Sanitize and validate inputs
-        const name = sanitizeString(nameRaw);
-        
-        // Skip if essential fields are empty or invalid
-        if (!name || name.length < 1) {
-          return; // continue to next iteration
-        }
-
-        const evWon = sanitizeNumber(evWonText);
-        const evBB100 = sanitizeNumber(evBB100Text);
-        const won = sanitizeNumber(wonText);
-        const hands = sanitizeNumber(handsText, true);
-
-        // Additional validation
-        if (hands < 0 || hands > 1000000000) {
-          return; // Skip invalid hand counts
-        }
-
-        players.push({
-          rank: index + 1,
-          name: name,
-          evWon: evWon,
-          evBB100: evBB100,
-          won: won,
-          hands: hands
-        });
+    try {
+      // Attempt to get cached data
+      cachedData = await getCachedLeaderboardData();
+      
+      // Quick timestamp check to see if webpage has been updated
+      const currentWebpageTimestamp = await fetchWebpageTimestamp();
+      
+      if (currentWebpageTimestamp && currentWebpageTimestamp !== cachedData.webpageTimestamp) {
+        // Webpage has been updated, bypass cache and fetch fresh data
+        // We'll let the cache naturally expire, but fetch fresh data now
+        cacheStatus = 'BYPASS';
+        cacheReason = 'webpage-updated';
+        // Force refetch by throwing an error to trigger the catch block
+        throw new Error('Webpage timestamp changed, fetching fresh data');
+      } else {
+        // Cache is valid
+        cacheStatus = currentWebpageTimestamp ? 'HIT' : 'HIT-NO-TIMESTAMP-CHECK';
+        cacheReason = currentWebpageTimestamp ? 'webpage-unchanged' : 'timestamp-check-failed';
       }
-    });
-
-    // Validate we got reasonable data
-    if (players.length === 0) {
-      logRequest(ip, 'error', 'No valid player data found');
-      throw new Error('No player data found in response');
+    } catch (cacheError) {
+      // If cache miss or timestamp changed, fetch fresh data
+      cacheStatus = 'MISS';
+      cacheReason = cacheError instanceof Error && cacheError.message.includes('timestamp changed')
+        ? 'webpage-updated'
+        : 'cache-miss';
+      cachedData = await getCachedLeaderboardData();
     }
 
-    // Merge country codes into player data (and auto-add new players to config)
-    const playersWithCountries = await mergeCountryCodes(players);
-    
-    // Load previous day's snapshot for comparison
+    // Load previous day's snapshot info for response
     const previousSnapshot = await loadPreviousDaySnapshot();
-    
-    // Calculate changes from previous day
-    const playersWithChanges = calculateChanges(playersWithCountries, previousSnapshot);
 
-    // Update daily snapshot if needed (non-blocking)
-    updateDailySnapshot(players, webpageTimestamp || new Date().toISOString()).catch(err => {
-      console.error('Error updating daily snapshot:', err);
-    });
+    logRequest(ip, 'success', `served from cache (${cacheReason})`);
 
-    // Cache the result with webpage timestamp
-    cachedData = {
-      players: playersWithChanges,
-      lastUpdated: new Date().toISOString(),
-      webpageTimestamp: webpageTimestamp || new Date().toISOString()
-    };
-    cacheTimestamp = Date.now();
-
-    logRequest(ip, 'success', `${players.length} players fetched, webpage timestamp: ${webpageTimestamp || 'unknown'}`);
-
-    return NextResponse.json({
+    const responseData = {
       players: cachedData.players,
       lastUpdated: cachedData.lastUpdated,
       webpageTimestamp: cachedData.webpageTimestamp,
       hasPreviousDayData: previousSnapshot !== null,
-      previousDayDate: previousSnapshot?.date || null
-    }, {
+      previousDayDate: previousSnapshot?.date || null,
+      isHistorical: false
+    };
+
+    // Validate response data before sending to client
+    const validatedResponse = safeValidate(
+      LeaderboardResponseSchema,
+      responseData,
+      'Leaderboard API response'
+    );
+
+    if (!validatedResponse) {
+      throw new Error('Failed to validate leaderboard response data');
+    }
+
+    return NextResponse.json(validatedResponse, {
       headers: {
         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-        'X-Cache': 'MISS'
+        'X-Cache': cacheStatus,
+        'X-Cache-Reason': cacheReason
       }
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logRequest(ip, 'error', errorMessage);
     
-    // Return cached data if available, even if stale
-    if (cachedData) {
-      console.warn('Returning stale cached data due to error:', errorMessage);
-      return NextResponse.json({
-        players: cachedData.players,
-        lastUpdated: cachedData.lastUpdated,
-        webpageTimestamp: cachedData.webpageTimestamp,
-        warning: 'Using cached data due to temporary fetch error'
-      }, {
-        headers: {
-          'X-Cache': 'STALE'
-        }
-      });
-    }
-
+    // For errors, Next.js cache will handle stale-while-revalidate
+    // But we'll try to return a user-friendly error
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to fetch leaderboard data',
         details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
       },

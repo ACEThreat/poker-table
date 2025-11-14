@@ -1,37 +1,24 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { countryCodeToFlag } from '@/lib/flags';
-
-type Player = {
-  rank: number;
-  name: string;
-  evWon: number;
-  evBB100: number;
-  won: number;
-  hands: number;
-  countryCode?: string; // ISO 3166-1 alpha-2 country code
-  // Comparison fields (differences from previous day)
-  rankChange?: number;
-  evWonChange?: number;
-  evBB100Change?: number;
-  wonChange?: number;
-  handsChange?: number;
-};
-
-type SortKey = keyof Player;
-type SortDirection = 'asc' | 'desc';
-
-type HistoricalSnapshot = {
-  date: string;
-  webpageTimestamp: string;
-  capturedAt: string;
-};
+import { retryWithBackoff } from '@/lib/retry';
+import { Player, SortKey, SortDirection, HistoricalSnapshot, SortConfig } from '@/lib/types';
+import ErrorDisplay from '@/components/ErrorDisplay';
+import LeaderboardTable from '@/components/LeaderboardTable';
+import SearchAndFilters from '@/components/SearchAndFilters';
+import HistoricalDateSelector from '@/components/HistoricalDateSelector';
+import {
+  SnapshotListResponseSchema,
+  LeaderboardResponseSchema,
+  HistoricalDataResponseSchema,
+  safeValidate
+} from '@/lib/schemas';
 
 export default function Home() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -54,13 +41,31 @@ export default function Home() {
 
   const fetchAvailableDates = async () => {
     try {
-      const response = await fetch('/api/history');
-      if (response.ok) {
+      await retryWithBackoff(async () => {
+        const response = await fetch('/api/history');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch available dates: ${response.status} ${response.statusText}`);
+        }
         const data = await response.json();
-        setAvailableDates(data.snapshots || []);
-      }
+        
+        // Validate the snapshot list response
+        const validatedData = safeValidate(
+          SnapshotListResponseSchema,
+          data,
+          'Snapshot list response from /api/history'
+        );
+        
+        if (!validatedData) {
+          console.error('Invalid snapshot list data received');
+          setAvailableDates([]);
+          return;
+        }
+        
+        setAvailableDates(validatedData.snapshots);
+      });
     } catch (err) {
       console.error('Failed to fetch available dates:', err);
+      // Don't set error state for this, it's not critical
     }
   };
 
@@ -69,25 +74,82 @@ export default function Home() {
       setLoading(true);
       setError(null);
       
-      const url = date ? `/api/history/${date}` : '/api/leaderboard';
-      const response = await fetch(url);
+      await retryWithBackoff(async () => {
+        const url = date ? `/api/history/${date}` : '/api/leaderboard';
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          // Provide more specific error messages based on status code
+          if (response.status === 404) {
+            throw new Error(date
+              ? `Historical data not found for ${date}`
+              : 'Leaderboard data not found'
+            );
+          } else if (response.status === 500) {
+            throw new Error('Server error - please try again later');
+          } else if (response.status >= 400 && response.status < 500) {
+            throw new Error(`Client error: ${response.status} ${response.statusText}`);
+          } else {
+            throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`);
+          }
+        }
+        
+        const data = await response.json();
+        
+        // Validate the response based on whether it's historical or current data
+        if (date) {
+          // Historical data validation
+          const validatedData = safeValidate(
+            HistoricalDataResponseSchema,
+            data,
+            `Historical data response from /api/history/${date}`
+          );
+          
+          if (!validatedData) {
+            throw new Error('Invalid historical data received from server');
+          }
+          
+          setPlayers(validatedData.players);
+          setLastUpdated(validatedData.capturedAt);
+          setWebpageTimestamp(validatedData.webpageTimestamp);
+          setHasPreviousDayData(validatedData.hasPreviousDayData);
+          setPreviousDayDate(validatedData.previousDayDate || null);
+          setIsHistoricalView(validatedData.isHistorical);
+        } else {
+          // Current leaderboard data validation
+          const validatedData = safeValidate(
+            LeaderboardResponseSchema,
+            data,
+            'Leaderboard data response from /api/leaderboard'
+          );
+          
+          if (!validatedData) {
+            throw new Error('Invalid leaderboard data received from server');
+          }
+          
+          setPlayers(validatedData.players);
+          setLastUpdated(validatedData.lastUpdated);
+          setWebpageTimestamp(validatedData.webpageTimestamp);
+          setHasPreviousDayData(validatedData.hasPreviousDayData);
+          setPreviousDayDate(validatedData.previousDayDate);
+          setIsHistoricalView(validatedData.isHistorical);
+        }
+      });
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
-      }
-      
-      const data = await response.json();
-      setPlayers(data.players || []);
-      setLastUpdated(data.lastUpdated || data.capturedAt || '');
-      setWebpageTimestamp(data.webpageTimestamp || '');
-      setHasPreviousDayData(data.hasPreviousDayData || false);
-      setPreviousDayDate(data.previousDayDate || null);
-      setIsHistoricalView(data.isHistorical || false);
+      // Reset retry count on success
+      setRetryCount(0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
+      console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRetry = () => {
+    setRetryCount((prev: number) => prev + 1);
+    fetchData(selectedDate || undefined);
   };
 
   const handleDateChange = (date: string | null) => {
@@ -105,6 +167,13 @@ export default function Home() {
     } else {
       setSortKey(key);
       setSortDirection('asc');
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchData(selectedDate || undefined);
+    if (!selectedDate) {
+      fetchAvailableDates();
     }
   };
 
@@ -139,45 +208,9 @@ export default function Home() {
     return result;
   }, [players, searchTerm, sortKey, sortDirection]);
 
-  const formatCurrency = (value: number) => {
-    const sign = value >= 0 ? '$' : '-$';
-    return sign + Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const formatNumber = (value: number) => {
-    return value.toLocaleString('en-US');
-  };
-
-  const formatChange = (value: number | undefined, isCurrency: boolean = false) => {
-    if (value === undefined || value === 0) return null;
-    
-    const sign = value > 0 ? '+' : '';
-    const formatted = isCurrency 
-      ? `${sign}${formatCurrency(value)}` 
-      : `${sign}${value.toFixed(2)}`;
-    
-    const color = value > 0 ? 'text-green-400' : 'text-red-400';
-    
-    return (
-      <span className={`text-xs ml-1 ${color}`}>
-        ({formatted})
-      </span>
-    );
-  };
-
-  const RankChangeIndicator = ({ change }: { change: number | undefined }) => {
-    if (change === undefined || change === 0) return null;
-    
-    if (change > 0) {
-      return <span className="text-green-400 text-xs ml-1" title={`Up ${change} position${change > 1 ? 's' : ''}`}>↑{change}</span>;
-    } else {
-      return <span className="text-red-400 text-xs ml-1" title={`Down ${Math.abs(change)} position${Math.abs(change) > 1 ? 's' : ''}`}>↓{Math.abs(change)}</span>;
-    }
-  };
-
-  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
-    if (sortKey !== columnKey) return <span className="text-gray-600">⇅</span>;
-    return sortDirection === 'asc' ? <span className="text-blue-400">↑</span> : <span className="text-blue-400">↓</span>;
+  const sortConfig: SortConfig = {
+    key: sortKey,
+    direction: sortDirection
   };
 
   return (
@@ -279,216 +312,52 @@ export default function Home() {
 
         <div className="mb-6 space-y-4">
           {/* Historical date selector */}
-          {availableDates.length > 0 && (
-            <div className="flex gap-4 items-center flex-wrap p-4 bg-gray-900 rounded-lg border border-gray-800">
-              <label className="text-gray-400 text-sm font-medium">View historical data:</label>
-              <select
-                value={selectedDate || ''}
-                onChange={(e) => handleDateChange(e.target.value || null)}
-                className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-blue-500 transition-colors"
-                disabled={loading}
-              >
-                <option value="">Current (Live Data)</option>
-                {availableDates.map((snapshot) => (
-                  <option key={snapshot.date} value={snapshot.date}>
-                    {new Date(snapshot.date).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </option>
-                ))}
-              </select>
-              {isHistoricalView && (
-                <span className="text-yellow-400 text-sm flex items-center gap-2">
-                  <span>📅</span>
-                  <span>Viewing historical snapshot</span>
-                </span>
-              )}
-            </div>
-          )}
+          <HistoricalDateSelector
+            availableDates={availableDates}
+            selectedDate={selectedDate}
+            onDateChange={handleDateChange}
+            loading={loading}
+            isHistoricalView={isHistoricalView}
+          />
 
           {/* Search and refresh controls */}
-          <div className="flex gap-4 items-center flex-wrap justify-between">
-            <div className="flex gap-4 items-center flex-1 min-w-[200px]">
-              <input
-                type="text"
-                placeholder="Search players..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-            <div className="flex gap-4 items-center">
-              {/* Previous day comparison toggle - minimal aesthetic version */}
-              {!isHistoricalView && hasPreviousDayData && previousDayDate && (
-                <button
-                  onClick={() => setShowPreviousDayStats(!showPreviousDayStats)}
-                  className={`group relative px-3 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 ${
-                    showPreviousDayStats 
-                      ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' 
-                      : 'bg-gray-800/50 text-gray-500 hover:bg-gray-800 hover:text-gray-400'
-                  }`}
-                  title={showPreviousDayStats ? `Hide changes since ${previousDayDate}` : `Show changes since ${previousDayDate}`}
-                >
-                  <span className="text-sm">📊</span>
-                  <span className="text-xs font-medium">{showPreviousDayStats ? 'On' : 'Off'}</span>
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  fetchData(selectedDate || undefined);
-                  if (!selectedDate) {
-                    fetchAvailableDates();
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
-                disabled={loading}
-              >
-                {loading ? 'Refreshing...' : 'Refresh Data'}
-              </button>
-            </div>
-          </div>
+          <SearchAndFilters
+            searchQuery={searchTerm}
+            onSearchChange={setSearchTerm}
+            showPreviousDay={showPreviousDayStats}
+            onTogglePreviousDay={() => setShowPreviousDayStats(!showPreviousDayStats)}
+            loading={loading}
+            isHistoricalView={isHistoricalView}
+            hasPreviousDayData={hasPreviousDayData}
+            previousDayDate={previousDayDate}
+            onRefresh={handleRefresh}
+          />
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-400">
-            Error: {error}
+          <div className="mb-6">
+            <ErrorDisplay
+              title="Failed to Load Data"
+              message={error}
+              onRetry={handleRetry}
+              retryText={retryCount > 0 ? `Retry (${retryCount})` : 'Retry'}
+            />
           </div>
         )}
 
         {loading && players.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">Loading data...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th
-                    onClick={() => handleSort('rank')}
-                    className="px-4 py-3 text-left cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      Rank <SortIcon columnKey="rank" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('name')}
-                    className="px-4 py-3 text-left cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      Player <SortIcon columnKey="name" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('evWon')}
-                    className="px-4 py-3 text-right cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <div className="flex items-center justify-end gap-2">
-                      $ EV Won <SortIcon columnKey="evWon" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('evBB100')}
-                    className="px-4 py-3 text-right cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <div className="flex items-center justify-end gap-2">
-                      EV BB/100 <SortIcon columnKey="evBB100" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('won')}
-                    className="px-4 py-3 text-right cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <div className="flex items-center justify-end gap-2">
-                      $ Won <SortIcon columnKey="won" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('hands')}
-                    className="px-4 py-3 text-right cursor-pointer hover:bg-gray-900 transition-colors"
-                  >
-                    <div className="flex items-center justify-end gap-2">
-                      Hands <SortIcon columnKey="hands" />
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAndSortedPlayers.map((player) => (
-                  <tr
-                    key={player.name}
-                    className="border-b border-gray-900 hover:bg-gray-900/50 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center">
-                        <span className={`font-medium ${
-                          player.rank === 1 ? 'text-yellow-400' : 
-                          player.rank === 2 ? 'text-gray-300' : 
-                          player.rank === 3 ? 'text-orange-400' : 
-                          'text-gray-400'
-                        }`}>
-                          {player.rank}
-                        </span>
-                        {showPreviousDayStats && <RankChangeIndicator change={player.rankChange} />}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      {player.countryCode && (
-                        <span className="mr-2" title={player.countryCode}>
-                          {countryCodeToFlag(player.countryCode)}
-                        </span>
-                      )}
-                      {player.name === 'SeaLlama' ? (
-                        <span className="text-yellow-500 font-bold">🐐 {player.name} 🐐</span>
-                      ) : (
-                        player.name
-                      )}
-                    </td>
-                    <td className={`px-4 py-3 text-right font-mono ${
-                      player.evWon >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      <div className="flex items-center justify-end">
-                        {formatCurrency(player.evWon)}
-                        {showPreviousDayStats && formatChange(player.evWonChange, true)}
-                      </div>
-                    </td>
-                    <td className={`px-4 py-3 text-right font-mono ${
-                      player.evBB100 >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      <div className="flex items-center justify-end">
-                        {player.evBB100.toFixed(2)}
-                        {showPreviousDayStats && formatChange(player.evBB100Change)}
-                      </div>
-                    </td>
-                    <td className={`px-4 py-3 text-right font-mono ${
-                      player.won >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      <div className="flex items-center justify-end">
-                        {formatCurrency(player.won)}
-                        {showPreviousDayStats && formatChange(player.wonChange, true)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-400">
-                      <div className="flex items-center justify-end">
-                        {formatNumber(player.hands)}
-                        {showPreviousDayStats && player.handsChange !== undefined && player.handsChange !== 0 && (
-                          <span className="text-xs ml-1 text-blue-400">
-                            (+{formatNumber(player.handsChange)})
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredAndSortedPlayers.length === 0 && (
-              <div className="text-center py-8 text-gray-400">
-                No players found matching &quot;{searchTerm}&quot;
-              </div>
-            )}
+          <div className="text-center py-12 text-gray-400">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
+            <p>Loading data{retryCount > 0 ? ` (Retry ${retryCount})` : ''}...</p>
           </div>
+        ) : (
+          <LeaderboardTable
+            players={filteredAndSortedPlayers}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+            showPreviousDay={showPreviousDayStats}
+            searchTerm={searchTerm}
+          />
         )}
 
         <div className="mt-6 text-center text-gray-500 text-sm">
