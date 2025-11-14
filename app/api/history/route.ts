@@ -15,8 +15,8 @@ interface SnapshotListResult {
 }
 
 // Cached function to fetch snapshot list
-// Since snapshots are only added once per day, we can cache this aggressively
-// Cache duration: 1 hour (3600 seconds)
+// Cache duration: 5 minutes to match leaderboard cache
+// This ensures new daily snapshots appear in the history selector soon after being saved
 const getCachedSnapshotList = unstable_cache(
   async (): Promise<SnapshotListResult> => {
     const { blobs } = await list({
@@ -65,7 +65,7 @@ const getCachedSnapshotList = unstable_cache(
   },
   ['snapshot-list'], // Cache key
   {
-    revalidate: 3600, // Cache for 1 hour (snapshots only change once per day)
+    revalidate: 300, // Cache for 5 minutes to match leaderboard cache
     tags: ['snapshot-list'] // Tags for potential on-demand revalidation
   }
 );
@@ -88,7 +88,7 @@ export async function GET() {
     
     return NextResponse.json(validatedResponse, {
       headers: {
-        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=7200',
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
         'X-Cache': 'HIT'
       }
     });
