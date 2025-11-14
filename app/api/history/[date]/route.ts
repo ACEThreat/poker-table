@@ -71,9 +71,14 @@ export async function GET(
         );
       }
       
+      // Prepare response with all required fields for HistoricalDataResponseSchema
       const responseData = {
-        ...validatedSnapshot,
-        isHistorical: true
+        players: validatedSnapshot.players,
+        capturedAt: validatedSnapshot.capturedAt,
+        webpageTimestamp: validatedSnapshot.webpageTimestamp,
+        isHistorical: true,
+        hasPreviousDayData: false,
+        previousDayDate: null
       };
       
       // Validate the API response
