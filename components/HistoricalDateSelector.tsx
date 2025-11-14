@@ -39,15 +39,20 @@ export default function HistoricalDateSelector({
         disabled={loading}
       >
         <option value="">Current (Live Data)</option>
-        {availableDates.map((snapshot) => (
-          <option key={snapshot.date} value={snapshot.date}>
-            {new Date(snapshot.date).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </option>
-        ))}
+        {availableDates.map((snapshot) => {
+          // Parse date without timezone conversion to avoid day shifts
+          const [year, month, day] = snapshot.date.split('-').map(Number);
+          const displayDate = new Date(year, month - 1, day).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          return (
+            <option key={snapshot.date} value={snapshot.date}>
+              {displayDate}
+            </option>
+          );
+        })}
       </select>
       {isHistoricalView && (
         <span className="text-yellow-400 text-sm flex items-center gap-2">

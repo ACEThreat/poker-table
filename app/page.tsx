@@ -296,11 +296,15 @@ export default function Home() {
           {isHistoricalView && selectedDate && (
             <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
               <p className="text-yellow-400 text-sm font-medium">
-                📅 Historical View: {new Date(selectedDate).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
+                📅 Historical View: {(() => {
+                  // Parse date without timezone conversion to avoid day shifts
+                  const [year, month, day] = selectedDate.split('-').map(Number);
+                  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  });
+                })()}
               </p>
               <p className="text-yellow-300/70 text-xs mt-1">
                 You are viewing a snapshot of the leaderboard as it was on this date
