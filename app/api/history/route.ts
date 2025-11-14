@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { list } from '@vercel/blob';
 import { unstable_cache } from 'next/cache';
 import { HistoricalSnapshotMetadataSchema, SnapshotListResponseSchema, safeValidate } from '@/lib/schemas';
+import { loadSnapshotIndex } from '@/lib/api/snapshot-management';
 
 interface HistoricalSnapshot {
   date: string;
@@ -14,49 +14,33 @@ interface SnapshotListResult {
   count: number;
 }
 
-// Cached function to fetch snapshot list
-// OPTIMIZATION: Cache duration increased to 1 hour to reduce expensive list() operations
-// Since snapshots are only created once per day, checking every hour is sufficient
+// OPTIMIZATION: Use snapshot index file instead of expensive list() operation
+// This eliminates 1 advanced operation per request (5x cost reduction)
+// The index is maintained automatically when snapshots are saved
 const getCachedSnapshotList = unstable_cache(
   async (): Promise<SnapshotListResult> => {
-    const { blobs } = await list({
-      prefix: 'snapshots/',
-    });
+    const index = await loadSnapshotIndex();
 
     const snapshots: HistoricalSnapshot[] = [];
 
-    for (const blob of blobs) {
-      if (blob.pathname.endsWith('.json')) {
-        try {
-          const response = await fetch(blob.url);
-          if (!response.ok) continue;
-          
-          const data = await response.json();
-          
-          // Validate snapshot metadata
-          const validatedMetadata = safeValidate(
-            HistoricalSnapshotMetadataSchema,
-            {
-              date: data.date,
-              webpageTimestamp: data.webpageTimestamp,
-              capturedAt: data.capturedAt
-            },
-            `Snapshot metadata for ${blob.pathname}`
-          );
-          
-          if (validatedMetadata) {
-            snapshots.push(validatedMetadata);
-          } else {
-            console.warn(`Skipping invalid snapshot metadata: ${blob.pathname}`);
-          }
-        } catch (error) {
-          console.error(`Error reading snapshot ${blob.pathname}:`, error);
-        }
+    for (const snapshot of index.snapshots) {
+      // Validate snapshot metadata
+      const validatedMetadata = safeValidate(
+        HistoricalSnapshotMetadataSchema,
+        {
+          date: snapshot.date,
+          webpageTimestamp: snapshot.webpageTimestamp,
+          capturedAt: snapshot.capturedAt
+        },
+        `Snapshot metadata for ${snapshot.date}`
+      );
+      
+      if (validatedMetadata) {
+        snapshots.push(validatedMetadata);
+      } else {
+        console.warn(`Skipping invalid snapshot metadata: ${snapshot.date}`);
       }
     }
-
-    // Sort by date, most recent first
-    snapshots.sort((a, b) => b.date.localeCompare(a.date));
 
     return {
       snapshots,
@@ -65,7 +49,7 @@ const getCachedSnapshotList = unstable_cache(
   },
   ['snapshot-list'], // Cache key
   {
-    revalidate: 3600, // OPTIMIZATION: Cache for 1 hour (reduced list() calls by 12x)
+    revalidate: 3600, // Cache for 1 hour
     tags: ['snapshot-list'] // Tags for potential on-demand revalidation
   }
 );

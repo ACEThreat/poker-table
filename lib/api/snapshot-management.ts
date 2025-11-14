@@ -122,7 +122,81 @@ export async function loadPreviousDaySnapshot(): Promise<HistoricalSnapshot | nu
 }
 
 /**
+ * Load snapshot index from Vercel Blob storage
+ * This eliminates the need for expensive list() operations
+ * @returns Snapshot metadata index
+ */
+export async function loadSnapshotIndex(): Promise<{ snapshots: Array<{ date: string; webpageTimestamp: string; capturedAt: string; playerCount: number }> }> {
+  try {
+    const indexPath = 'snapshots/index.json';
+    const blobUrl = `https://${process.env.BLOB_READ_WRITE_TOKEN!.split('_')[0]}.public.blob.vercel-storage.com/${indexPath}`;
+    
+    const response = await fetch(blobUrl, {
+      next: { revalidate: 3600 } // Cache for 1 hour
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('No snapshot index found, returning empty index');
+        return { snapshots: [] };
+      }
+      throw new Error(`Failed to fetch snapshot index: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error loading snapshot index:', error);
+    return { snapshots: [] };
+  }
+}
+
+/**
+ * Update snapshot index with new snapshot metadata
+ * @param snapshot - New snapshot to add to index
+ */
+async function updateSnapshotIndex(snapshot: HistoricalSnapshot): Promise<void> {
+  try {
+    // Load existing index
+    const index = await loadSnapshotIndex();
+    
+    // Add or update snapshot in index
+    const existingIndex = index.snapshots.findIndex(s => s.date === snapshot.date);
+    const newEntry = {
+      date: snapshot.date,
+      webpageTimestamp: snapshot.webpageTimestamp,
+      capturedAt: snapshot.capturedAt,
+      playerCount: snapshot.players.length
+    };
+    
+    if (existingIndex >= 0) {
+      index.snapshots[existingIndex] = newEntry;
+    } else {
+      index.snapshots.push(newEntry);
+    }
+    
+    // Sort by date, most recent first
+    index.snapshots.sort((a, b) => b.date.localeCompare(a.date));
+    
+    // Save updated index
+    const indexPath = 'snapshots/index.json';
+    await put(indexPath, JSON.stringify(index, null, 2), {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/json',
+      cacheControlMaxAge: 0,
+      allowOverwrite: true,
+    });
+    
+    console.log(`Snapshot index updated with ${snapshot.date}`);
+  } catch (error) {
+    console.error('Error updating snapshot index:', error);
+    // Non-critical error, don't throw
+  }
+}
+
+/**
  * Save snapshot to Vercel Blob storage
+ * OPTIMIZATION: Now includes custom metadata and updates snapshot index
  * @param snapshot - Historical snapshot to save
  */
 export async function saveSnapshot(snapshot: HistoricalSnapshot): Promise<void> {
@@ -139,12 +213,18 @@ export async function saveSnapshot(snapshot: HistoricalSnapshot): Promise<void> 
     }
     
     const blobPath = `${SNAPSHOTS_BLOB_PREFIX}${snapshot.date}.json`;
+    
+    // Save snapshot to blob storage
     await put(blobPath, JSON.stringify(validatedSnapshot, null, 2), {
       access: 'public',
       addRandomSuffix: false,
       contentType: 'application/json',
     });
+    
     console.log(`Snapshot saved to Blob: ${blobPath}`);
+    
+    // OPTIMIZATION: Update snapshot index to eliminate future list() calls
+    await updateSnapshotIndex(validatedSnapshot);
   } catch (error) {
     console.error('Error saving snapshot to Blob:', error);
   }
