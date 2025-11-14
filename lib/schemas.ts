@@ -41,6 +41,7 @@ export const PlayerSchema = z.object({
   
   countryCode: z.string()
     .length(2, 'Country code must be 2 characters')
+    .nullable()
     .optional()
     .describe('ISO 3166-1 alpha-2 country code'),
   
