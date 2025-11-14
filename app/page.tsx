@@ -193,10 +193,10 @@ export default function Home() {
       const bVal = b[sortKey];
       const modifier = sortDirection === 'asc' ? 1 : -1;
       
-      // Handle undefined values
-      if (aVal === undefined && bVal === undefined) return 0;
-      if (aVal === undefined) return 1 * modifier;
-      if (bVal === undefined) return -1 * modifier;
+      // Handle undefined and null values
+      if ((aVal === undefined || aVal === null) && (bVal === undefined || bVal === null)) return 0;
+      if (aVal === undefined || aVal === null) return 1 * modifier;
+      if (bVal === undefined || bVal === null) return -1 * modifier;
       
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return aVal.localeCompare(bVal) * modifier;
