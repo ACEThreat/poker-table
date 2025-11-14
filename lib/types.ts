@@ -12,7 +12,7 @@ export type Player = {
   evBB100: number;
   won: number;
   hands: number;
-  countryCode?: string; // ISO 3166-1 alpha-2 country code
+  countryCode?: string | null; // ISO 3166-1 alpha-2 country code
   // Comparison fields (differences from previous day)
   rankChange?: number;
   evWonChange?: number;
