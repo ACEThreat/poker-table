@@ -494,6 +494,20 @@ export default function Home() {
         <div className="mt-6 text-center text-gray-500 text-sm">
           Showing {filteredAndSortedPlayers.length} of {players.length} players
         </div>
+
+        <div className="mt-8 pt-6 border-t border-gray-800 text-center">
+          <p className="text-gray-500 text-xs">
+            All information comes from:{' '}
+            <a
+              href="https://www.pokerstrategy.com/HSCGWP2025/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline transition-colors"
+            >
+              https://www.pokerstrategy.com/HSCGWP2025/
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );
