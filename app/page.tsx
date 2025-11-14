@@ -75,7 +75,11 @@ export default function Home() {
       setError(null);
       
       await retryWithBackoff(async () => {
-        const url = date ? `/api/history/${date}` : '/api/leaderboard';
+        let url = date ? `/api/history/${date}` : '/api/leaderboard';
+        // Add cache busting parameter to avoid stale CDN responses
+        if (date) {
+          url += `?v=${Date.now()}`;
+        }
         const response = await fetch(url);
         
         if (!response.ok) {
