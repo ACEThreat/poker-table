@@ -10,12 +10,18 @@ Phase 2 of the blob cost optimization has been successfully implemented:
 - Modified `saveSnapshot()` to update the index whenever a new snapshot is saved
 
 ### ✅ 2. History Route Optimization
-- Updated `app/api/history/route.ts` to use the snapshot index instead of `list()`
-- **Eliminates 1 expensive list() operation per request** (5x cost reduction)
-- Now fetches a single index file instead of listing all blobs + fetching N files
+- Updated `app/api/history/route.ts` to use the snapshot index with fallback
+- **When index exists: Eliminates expensive list() + N fetches, replaced with 1 fetch of index**
+- **When index doesn't exist: Falls back to traditional method automatically**
+- No breaking changes - works seamlessly with or without the index file
 
 ### ✅ 3. Rebuild Script
 - Created `scripts/rebuild-snapshot-index.ts` to generate initial index from existing snapshots
+
+### ✅ 4. Fixed Blob Access Methods
+- Fixed blob URL construction issues that were causing "Bad Request" errors
+- All blob loading functions now use `list()` with specific prefixes to get correct URLs
+- This approach still provides benefits over listing all blobs (more targeted queries)
 
 ---
 

@@ -62,21 +62,25 @@ export async function getAvailableSnapshots(): Promise<string[]> {
  */
 export async function loadSnapshot(date: string): Promise<HistoricalSnapshot | null> {
   try {
-    // OPTIMIZATION: Use direct URL instead of expensive list() operation
-    // This eliminates 1 advanced operation per snapshot load (5x cost reduction)
+    // Use list() with specific prefix to find the snapshot
     const blobPath = `${SNAPSHOTS_BLOB_PREFIX}${date}.json`;
-    const blobUrl = `https://${process.env.BLOB_READ_WRITE_TOKEN!.split('_')[0]}.public.blob.vercel-storage.com/${blobPath}`;
+    const { blobs } = await list({
+      prefix: blobPath,
+      limit: 1,
+    });
     
-    const response = await fetch(blobUrl, {
+    if (blobs.length === 0) {
+      // Snapshot doesn't exist - this is normal
+      return null;
+    }
+    
+    const blob = blobs[0];
+    const response = await fetch(blob.url, {
       // Add cache control to leverage CDN
       next: { revalidate: 3600 } // Cache for 1 hour
     });
     
     if (!response.ok) {
-      if (response.status === 404) {
-        // Snapshot doesn't exist - this is normal
-        return null;
-      }
       console.error(`Failed to fetch snapshot for ${date}: ${response.statusText}`);
       return null;
     }
@@ -123,24 +127,32 @@ export async function loadPreviousDaySnapshot(): Promise<HistoricalSnapshot | nu
 
 /**
  * Load snapshot index from Vercel Blob storage
- * This eliminates the need for expensive list() operations
+ * This eliminates the need for expensive list() operations in the history route
  * @returns Snapshot metadata index
  */
 export async function loadSnapshotIndex(): Promise<{ snapshots: Array<{ date: string; webpageTimestamp: string; capturedAt: string; playerCount: number }> }> {
   try {
     const indexPath = 'snapshots/index.json';
-    const blobUrl = `https://${process.env.BLOB_READ_WRITE_TOKEN!.split('_')[0]}.public.blob.vercel-storage.com/${indexPath}`;
     
-    const response = await fetch(blobUrl, {
+    // Use list() to find the index file
+    const { blobs } = await list({
+      prefix: indexPath,
+      limit: 1,
+    });
+    
+    if (blobs.length === 0) {
+      console.log('No snapshot index found, returning empty index');
+      return { snapshots: [] };
+    }
+    
+    const blob = blobs[0];
+    const response = await fetch(blob.url, {
       next: { revalidate: 3600 } // Cache for 1 hour
     });
     
     if (!response.ok) {
-      if (response.status === 404) {
-        console.log('No snapshot index found, returning empty index');
-        return { snapshots: [] };
-      }
-      throw new Error(`Failed to fetch snapshot index: ${response.statusText}`);
+      console.warn(`Failed to fetch snapshot index: ${response.statusText}`);
+      return { snapshots: [] };
     }
     
     return await response.json();

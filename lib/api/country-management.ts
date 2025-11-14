@@ -13,20 +13,24 @@ import { PlayerData } from './types';
  */
 export async function loadCountryMappings(): Promise<Record<string, string | null>> {
   try {
-    // OPTIMIZATION: Use direct URL instead of expensive list() operation
-    // This eliminates 1 advanced operation per request (5x cost reduction)
-    const blobUrl = `https://${process.env.BLOB_READ_WRITE_TOKEN!.split('_')[0]}.public.blob.vercel-storage.com/${COUNTRIES_BLOB_PATH}`;
+    // Use list() to find the countries file
+    const { blobs } = await list({
+      prefix: COUNTRIES_BLOB_PATH,
+      limit: 1,
+    });
     
-    const response = await fetch(blobUrl, {
+    if (blobs.length === 0) {
+      console.log('No countries.json found in Blob storage');
+      return {};
+    }
+    
+    const blob = blobs[0];
+    const response = await fetch(blob.url, {
       // Add cache control to leverage CDN
       next: { revalidate: 300 } // Cache for 5 minutes
     });
     
     if (!response.ok) {
-      if (response.status === 404) {
-        console.log('No countries.json found in Blob storage');
-        return {};
-      }
       throw new Error(`Failed to fetch countries: ${response.statusText}`);
     }
     
