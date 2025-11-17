@@ -99,7 +99,7 @@ const getCachedSnapshotList = unstable_cache(
       count: snapshots.length
     };
   },
-  ['snapshot-list'], // Cache key
+  ['snapshot-list-v2'], // Cache key - bumped version to force refresh
   {
     revalidate: 3600, // Cache for 1 hour
     tags: ['snapshot-list'] // Tags for potential on-demand revalidation
