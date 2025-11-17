@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     // Revalidate the snapshot-list cache tag
-    revalidateTag('snapshot-list');
+    revalidateTag('snapshot-list', '/');
     
     console.log('✅ Cache revalidated for snapshot-list');
     
