@@ -13,7 +13,7 @@ export async function GET() {
     
     console.log('🔍 Fetching all blobs from storage...');
     while (true) {
-      const listResult = await list({
+      const listResult: Awaited<ReturnType<typeof list>> = await list({
         prefix: 'snapshots/',
         limit: 1000,
         cursor,
