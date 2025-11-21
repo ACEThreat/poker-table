@@ -45,7 +45,9 @@ export const getCachedLeaderboardData = unstable_cache(
     const players: PlayerData[] = [];
 
     // Find the table and parse rows
-    $('table.tableDefault tbody tr').each((index, element) => {
+    // We use .first() to ensure we only get the main leaderboard table,
+    // avoiding other tables (like daily winners/losers) that use the same class
+    $('table.tableDefault').first().find('tbody tr').each((index, element) => {
       const cells = $(element).find('td');
       if (cells.length >= 6) {
         const nameRaw = $(cells[1]).text().trim();
