@@ -53,10 +53,11 @@ export const getCachedLeaderboardData = unstable_cache(
         const nameRaw = $(cells[1]).text().trim();
 
         // Extract values, removing any superscript details (daily changes)
-        const evWonText = $(cells[2]).clone().find('sup').remove().end().text().trim();
+        // We also split by whitespace to handle cases where the delta is appended as plain text
+        const evWonText = $(cells[2]).clone().find('sup').remove().end().text().trim().split(/\s+/)[0];
         const evBB100Text = $(cells[3]).text().trim();
         const wonText = $(cells[4]).text().trim();
-        const handsText = $(cells[5]).clone().find('sup').remove().end().text().trim();
+        const handsText = $(cells[5]).clone().find('sup').remove().end().text().trim().split(/\s+/)[0];
 
         // Sanitize and validate inputs
         const name = sanitizeString(nameRaw);
