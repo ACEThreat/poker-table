@@ -49,10 +49,12 @@ export const getCachedLeaderboardData = unstable_cache(
       const cells = $(element).find('td');
       if (cells.length >= 6) {
         const nameRaw = $(cells[1]).text().trim();
-        const evWonText = $(cells[2]).text().trim();
+
+        // Extract values, removing any superscript details (daily changes)
+        const evWonText = $(cells[2]).clone().find('sup').remove().end().text().trim();
         const evBB100Text = $(cells[3]).text().trim();
         const wonText = $(cells[4]).text().trim();
-        const handsText = $(cells[5]).text().trim();
+        const handsText = $(cells[5]).clone().find('sup').remove().end().text().trim();
 
         // Sanitize and validate inputs
         const name = sanitizeString(nameRaw);
