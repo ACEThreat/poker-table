@@ -227,10 +227,13 @@ export async function saveSnapshot(snapshot: HistoricalSnapshot): Promise<void> 
     const blobPath = `${SNAPSHOTS_BLOB_PREFIX}${snapshot.date}.json`;
     
     // Save snapshot to blob storage
+    // allowOverwrite: true handles race conditions where multiple requests
+    // might try to save the same snapshot simultaneously
     await put(blobPath, JSON.stringify(validatedSnapshot, null, 2), {
       access: 'public',
       addRandomSuffix: false,
       contentType: 'application/json',
+      allowOverwrite: true,
     });
     
     console.log(`Snapshot saved to Blob: ${blobPath}`);

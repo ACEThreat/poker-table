@@ -37,5 +37,5 @@ export const LEADERBOARD_URL = 'https://www.pokerstrategy.com/HSCGWP2025/';
 /**
  * Request timeout configurations
  */
-export const TIMESTAMP_FETCH_TIMEOUT = 5000; // 5 seconds for lightweight timestamp check
-export const DATA_FETCH_TIMEOUT = 10000; // 10 seconds for full data fetch
+export const TIMESTAMP_FETCH_TIMEOUT = 10000; // 10 seconds for lightweight timestamp check
+export const DATA_FETCH_TIMEOUT = 30000; // 30 seconds for full data fetch (increased for slow network conditions)
